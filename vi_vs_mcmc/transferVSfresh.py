@@ -15,16 +15,16 @@ import os
 N = 10000
 D = 10
 
-def dgp(X, device): # data generating process
+def dgp(X): # data generating process
     N, D = X.shape
     K = 7 # True number of factors that we'll be looking for
     #K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale = hyperparameters
     K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale = (K,torch.randn(D),torch.abs(torch.randn(D)),torch.randn(D),torch.abs(torch.randn(D)),torch.randn(K,D),torch.abs(torch.randn(K,D))*2)
     with pyro.plate('D', D):
-        loc = pyro.sample('loc', dst.Normal(locloc.to(device), locscale.to(device)))
-        cov_diag = pyro.sample('scale', dst.LogNormal(scaleloc.to(device), scalescale.to(device)))
+        loc = pyro.sample('loc', dst.Normal(locloc, locscale))
+        cov_diag = pyro.sample('scale', dst.LogNormal(scaleloc, scalescale))
         with pyro.plate('K', K):
-            cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc.to(device),cov_factor_scale.to(device)))
+            cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc,cov_factor_scale))
         cov_factor = cov_factor.transpose(0,1)
     with pyro.plate('N', N):
         X = pyro.sample('obs', dst.LowRankMultivariateNormal(loc, cov_factor=cov_factor, cov_diag=cov_diag))
@@ -32,24 +32,24 @@ def dgp(X, device): # data generating process
 
 def model(X, hyperparameters):
     N, D = X.shape
-    K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale, device = hyperparameters
+    K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale = hyperparameters
     with pyro.plate('D', D):
-        loc = pyro.sample('loc', dst.Normal(locloc.to(device), locscale.to(device)))
-        cov_diag = pyro.sample('scale', dst.LogNormal(scaleloc.to(device), scalescale.to(device)))
+        loc = pyro.sample('loc', dst.Normal(locloc, locscale))
+        cov_diag = pyro.sample('scale', dst.LogNormal(scaleloc, scalescale))
         with pyro.plate('K', K):
-            cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc.to(device),cov_factor_scale.to(device)))
+            cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc,cov_factor_scale))
         cov_factor = cov_factor.transpose(0,1)
     with pyro.plate('N', N):
         X = pyro.sample('obs', dst.LowRankMultivariateNormal(loc, cov_factor=cov_factor, cov_diag=cov_diag))
     return X
 
 def guide(X, hyperparameters):
-    K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale, device = hyperparameters
+    K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale = hyperparameters
     with pyro.plate('D', D, dim=-1):
-        loc_loc = pyro.param('loc_loc', locloc.to(device))
-        loc_scale = pyro.param('loc_scale', locscale.to(device), constraint=constraints.positive)
-        cov_diag_loc = pyro.param('scale_loc', scaleloc.to(device))
-        cov_diag_scale = pyro.param('scale_scale', scalescale.to(device), constraint=constraints.positive)
+        loc_loc = pyro.param('loc_loc', locloc)
+        loc_scale = pyro.param('loc_scale', locscale, constraint=constraints.positive)
+        cov_diag_loc = pyro.param('scale_loc', scaleloc)
+        cov_diag_scale = pyro.param('scale_scale', scalescale, constraint=constraints.positive)
         # sample variables
         loc = pyro.sample('loc', dst.Normal(loc_loc,loc_scale))
         with pyro.plate('K', K, dim=-2):
@@ -113,10 +113,10 @@ def posterior_predictive(model, posterior, data, hyperparameters, n_samples = 10
 
 if __name__ == '__main__':
 
-    torch.set_default_tensor_type('torch.cuda.DoubleTensor')
     os.environ["CUDA_VISIBLE_DEVICES"]="0"
     cuda0 = torch.device('cuda:0')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     # run dgp and get a trace of its execution to record the true parameters
     trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(N,D))
