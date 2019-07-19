@@ -113,7 +113,7 @@ def posterior_predictive(model, posterior, data, hyperparameters, n_samples = 10
 
 if __name__ == '__main__':
 
-    torch.set_default_tensor_type(‘torch.cuda.DoubleTensor’)
+    torch.set_default_tensor_type('torch.cuda.DoubleTensor')
     os.environ["CUDA_VISIBLE_DEVICES"]="0"
     cuda0 = torch.device('cuda:0')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
