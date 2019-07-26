@@ -18,7 +18,7 @@ import argparse
 
 N = 10000
 D = 10
-batch_size = N//500
+batch_size = N//100
 
 def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None):
     if not experimental_condition:
@@ -85,7 +85,7 @@ def guide(X, hyperparameters):
 
 def inference(model, guide, data, hyperparameters, track_params = True, n_iter = 20000):
     def per_param_callable(module_name, param_name):
-        return {"lr": 0.03, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
+        return {"lr": 0.01, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
         #return {"lr": 0.01, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
 
     pyro.clear_param_store()
