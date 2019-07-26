@@ -21,7 +21,7 @@ N = 10000
 D = 10
 batch_size = N//1000
 
-def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None, data):
+def get_hyperparameters(data, K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None):
     if not experimental_condition:
         locloc = hyperparameter_std*torch.randn(D)
         locscale = torch.abs(hyperparameter_std*torch.randn(D))
