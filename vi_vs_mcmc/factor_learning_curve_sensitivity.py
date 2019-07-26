@@ -205,7 +205,7 @@ if __name__ == '__main__':
                         if K == 1:
                             initial_hyperparameters = get_hyperparameters(data, K = K, hyperparameter_std = 3)
                         else:
-                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data, experimental_condition = experimental_condition, param_history = param_history)
+                            initial_hyperparameters = get_hyperparameters(data, K = K, hyperparameter_std = 3, experimental_condition = experimental_condition, param_history = param_history)
 
                     learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
                     break
