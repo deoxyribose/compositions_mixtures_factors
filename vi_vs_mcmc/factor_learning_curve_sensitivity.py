@@ -199,7 +199,14 @@ if __name__ == '__main__':
                     initial_hyperparameters = (K,param_history['loc_loc'][-1].detach(),param_history['loc_scale'][-1].detach(),param_history['scale_loc'][-1].detach(),
                         param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init)
 
-            learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
+            tries = 0
+            while tries < 4:
+                try:
+                    learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
+                    tries += 1
+                except RuntimeError:
+                    print('Cholesky failed')
+
             predictive_posterior_sample, model_log_evidence = posterior_predictive(model, posterior, data, initial_hyperparameters)
             # save experimental data
             #telemetry[[K-1,experimental_condition]] = learning_curve
