@@ -198,14 +198,14 @@ if __name__ == '__main__':
                 try:
                     if not experimental_condition: # no transfer
                         # train every model with randomly initialized parameters
-                        initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data)
+                        initial_hyperparameters = get_hyperparameters(data, K = K, hyperparameter_std = 3)
                     else:
                         # train every subsequent model with parameters initialized in previous ones (except the new factor parameters, which are random)
                         # this goes for both hyperparameters, and initial values of variational parameters
                         if K == 1:
-                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data)
+                            initial_hyperparameters = get_hyperparameters(data, K = K, hyperparameter_std = 3)
                         else:
-                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, experimental_condition = experimental_condition, param_history = param_history, data)
+                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data, experimental_condition = experimental_condition, param_history = param_history)
 
                     learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
                     break
