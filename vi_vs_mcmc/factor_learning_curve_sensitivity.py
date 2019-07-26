@@ -18,7 +18,7 @@ import argparse
 
 N = 10000
 D = 10
-batch_size = N//1000
+batch_size = N//500
 
 def get_hyperparameters(K = 1, hyperparameter_std = 1):
     locloc = hyperparameter_std*torch.randn(D)
@@ -84,7 +84,7 @@ def inference(model, guide, data, hyperparameters, track_params = True, n_iter =
     optim = torch.optim.Adam
     scheduler = pyro.optim.ExponentialLR({'optimizer': optim, 'optim_args': per_param_callable, 'gamma': 0.9 })
     elbo = Trace_ELBO()
-    svi = SVI(model, guide, scheduler, loss=elbo, num_samples=10)
+    svi = SVI(model, guide, scheduler, loss=elbo, num_samples=30)
     svi2 = SVI(model, guide, scheduler, loss=elbo, num_samples=1000)
 
     # Register hooks to monitor gradient norms.
