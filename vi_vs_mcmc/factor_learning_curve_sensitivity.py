@@ -203,8 +203,9 @@ if __name__ == '__main__':
             while tries < 4:
                 try:
                     learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
-                    tries += 1
+                    break
                 except RuntimeError:
+                    tries += 1
                     print('Cholesky failed')
 
             predictive_posterior_sample, model_log_evidence = posterior_predictive(model, posterior, data, initial_hyperparameters)
