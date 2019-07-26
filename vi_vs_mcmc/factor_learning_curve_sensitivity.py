@@ -15,10 +15,11 @@ import pandas as pd
 import xarray as xr
 from scipy.stats import norm
 import argparse
+from sklearn.decomposition import PCA
 
 N = 10000
 D = 10
-batch_size = N//100
+batch_size = N//1000
 
 def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None):
     if not experimental_condition:
@@ -26,7 +27,8 @@ def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 
         locscale = torch.abs(hyperparameter_std*torch.randn(D))
         scaleloc = hyperparameter_std*torch.randn(D)
         scalescale = torch.abs(hyperparameter_std*torch.randn(D))
-        cov_factor_loc = hyperparameter_std*torch.randn(K,D)
+        cov_factor_loc = torch.tensor(PCA(n_components=K).fit(data).components_, dtype=torch.float32)
+        #cov_factor_loc = hyperparameter_std*torch.randn(K,D)
         cov_factor_scale = torch.abs(hyperparameter_std*torch.randn(K,D))
         return K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
     else:
@@ -85,7 +87,7 @@ def guide(X, hyperparameters):
 
 def inference(model, guide, data, hyperparameters, track_params = True, n_iter = 20000):
     def per_param_callable(module_name, param_name):
-        return {"lr": 0.01, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
+        return {"lr": 0.1, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
         #return {"lr": 0.01, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
 
     pyro.clear_param_store()
@@ -93,7 +95,7 @@ def inference(model, guide, data, hyperparameters, track_params = True, n_iter =
     optim = torch.optim.Adam
     scheduler = pyro.optim.ExponentialLR({'optimizer': optim, 'optim_args': per_param_callable, 'gamma': 0.9 })
     elbo = Trace_ELBO()
-    svi = SVI(model, guide, scheduler, loss=elbo, num_samples=30)
+    svi = SVI(model, guide, scheduler, loss=elbo, num_samples=10)
     svi2 = SVI(model, guide, scheduler, loss=elbo, num_samples=1000)
 
     # Register hooks to monitor gradient norms.
