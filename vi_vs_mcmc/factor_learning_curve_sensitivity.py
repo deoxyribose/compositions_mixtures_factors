@@ -140,8 +140,8 @@ def posterior_predictive(model, posterior, data, hyperparameters, n_samples = 10
     random_idx = np.random.randint(batch_size)
     predictive_dst_sample = [torch.unsqueeze(trace.nodes['obs']['value'][random_idx,:],dim=0) for trace in trace_pred.exec_traces]
     predictive_dst_sample = torch.cat(predictive_dst_sample, dim=0)
-    random_10_idx = np.random.randint(N, size = 10)
-    model_log_evidence = [torch.unsqueeze(trace.nodes['obs']['fn'].log_prob(data[random_10_idx,:]),dim=0) for trace in trace_pred.exec_traces]
+    random_idx = np.random.randint(N, size = batch_size)
+    model_log_evidence = [torch.unsqueeze(trace.nodes['obs']['fn'].log_prob(data[random_idx,:]),dim=0) for trace in trace_pred.exec_traces]
     model_log_evidence = (torch.logsumexp(torch.cat(model_log_evidence),dim=0)-np.log(np.float(10))).mean()
     return predictive_dst_sample, model_log_evidence
 
