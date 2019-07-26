@@ -20,14 +20,23 @@ N = 10000
 D = 10
 batch_size = N//500
 
-def get_hyperparameters(K = 1, hyperparameter_std = 1):
-    locloc = hyperparameter_std*torch.randn(D)
-    locscale = torch.abs(hyperparameter_std*torch.randn(D))
-    scaleloc = hyperparameter_std*torch.randn(D)
-    scalescale = torch.abs(hyperparameter_std*torch.randn(D))
-    cov_factor_loc = hyperparameter_std*torch.randn(K,D)
-    cov_factor_scale = torch.abs(hyperparameter_std*torch.randn(K,D))
-    return K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None):
+    if not experimental_condition:
+        locloc = hyperparameter_std*torch.randn(D)
+        locscale = torch.abs(hyperparameter_std*torch.randn(D))
+        scaleloc = hyperparameter_std*torch.randn(D)
+        scalescale = torch.abs(hyperparameter_std*torch.randn(D))
+        cov_factor_loc = hyperparameter_std*torch.randn(K,D)
+        cov_factor_scale = torch.abs(hyperparameter_std*torch.randn(K,D))
+        return K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+    else:
+        print('Setting priors to posterior learnt by previous model.')
+        cov_loc_init = torch.randn(K,D)
+        cov_loc_init[:K-1,:] = param_history['cov_factor_loc_{}'.format(K-1)][-1].detach()
+        cov_scale_init = torch.abs(torch.randn(K,D))*2
+        cov_scale_init[:K-1,:] = param_history['cov_factor_scale_{}'.format(K-1)][-1].detach()
+        return K,param_history['loc_loc'][-1].detach(),param_history['loc_scale'][-1].detach(),param_history['scale_loc'][-1].detach(),param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init
+
 
 def dgp(X): # data generating process
     N, D = X.shape
@@ -182,26 +191,20 @@ if __name__ == '__main__':
         for K in range(1,Kmax+1):
             start = time.time()
             print('\nTraining model with {} factors'.format(K))
-            if not experimental_condition: # no transfer
-                # train every model with randomly initialized parameters
-                initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
-            else:
-                # train every subsequent model with parameters initialized in previous ones (except the new factor parameters, which are random)
-                # this goes for both hyperparameters, and initial values of variational parameters
-                if K == 1:
-                    initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
-                else:
-                    print('Setting priors to posterior learnt by previous model.')
-                    cov_loc_init = torch.randn(K,D)
-                    cov_loc_init[:K-1,:] = param_history['cov_factor_loc_{}'.format(K-1)][-1].detach()
-                    cov_scale_init = torch.abs(torch.randn(K,D))*2
-                    cov_scale_init[:K-1,:] = param_history['cov_factor_scale_{}'.format(K-1)][-1].detach()
-                    initial_hyperparameters = (K,param_history['loc_loc'][-1].detach(),param_history['loc_scale'][-1].detach(),param_history['scale_loc'][-1].detach(),
-                        param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init)
-
             tries = 0
             while tries < 4:
                 try:
+                    if not experimental_condition: # no transfer
+                        # train every model with randomly initialized parameters
+                        initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
+                    else:
+                        # train every subsequent model with parameters initialized in previous ones (except the new factor parameters, which are random)
+                        # this goes for both hyperparameters, and initial values of variational parameters
+                        if K == 1:
+                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
+                        else:
+                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, experimental_condition = experimental_condition, param_history = param_history)
+
                     learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
                     break
                 except RuntimeError:
