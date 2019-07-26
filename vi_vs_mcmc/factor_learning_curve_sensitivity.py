@@ -184,8 +184,7 @@ if __name__ == '__main__':
             print('\nTraining model with {} factors'.format(K))
             if not experimental_condition: # no transfer
                 # train every model with randomly initialized parameters
-                hyperparameter_std = 3
-                initial_hyperparameters = 
+                initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
             else:
                 # train every subsequent model with parameters initialized in previous ones (except the new factor parameters, which are random)
                 # this goes for both hyperparameters, and initial values of variational parameters
