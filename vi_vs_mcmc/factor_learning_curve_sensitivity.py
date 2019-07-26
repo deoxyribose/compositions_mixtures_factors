@@ -21,7 +21,7 @@ N = 10000
 D = 10
 batch_size = N//1000
 
-def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None):
+def get_hyperparameters(K = 1, hyperparameter_std = 1, experimental_condition = 0, param_history = None, data):
     if not experimental_condition:
         locloc = hyperparameter_std*torch.randn(D)
         locscale = torch.abs(hyperparameter_std*torch.randn(D))
@@ -198,14 +198,14 @@ if __name__ == '__main__':
                 try:
                     if not experimental_condition: # no transfer
                         # train every model with randomly initialized parameters
-                        initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
+                        initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data)
                     else:
                         # train every subsequent model with parameters initialized in previous ones (except the new factor parameters, which are random)
                         # this goes for both hyperparameters, and initial values of variational parameters
                         if K == 1:
-                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3)
+                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, data)
                         else:
-                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, experimental_condition = experimental_condition, param_history = param_history)
+                            initial_hyperparameters = get_hyperparameters(K = K, hyperparameter_std = 3, experimental_condition = experimental_condition, param_history = param_history, data)
 
                     learning_curve, param_history, posterior = inference(model, guide, data, initial_hyperparameters, n_iter = n_iter)
                     break
