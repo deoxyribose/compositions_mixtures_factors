@@ -207,6 +207,6 @@ if __name__ == '__main__':
             #model_log_evidences[[K-1,experimental_condition]] = model_log_evidence.detach().numpy()
             end = time.time()
             print('\nTraining took {} seconds'.format(round(end - start))) 
-            pickle.dump((data, learning_curve, param_history, predictive_posterior_sample, model_log_evidence),open( "factor_experiment_transfer_{}_factors.p".format(K), "wb" ))
+            pickle.dump((data, learning_curve, param_history, predictive_posterior_sample, model_log_evidence),open( "factor_experiment_transfer_{}_factors_{}.p".format(K,str(experimental_condition)), "wb" ))
     
     #pickle.dump((data, telemetry, results, model_log_evidences),open( "factor_experiment_transfer_{}_factors.p", "wb" ))
