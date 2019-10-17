@@ -312,4 +312,4 @@ if __name__ == '__main__':
             losses, lppds, param_history, init, lrs, gradient_norms = inference(model, guide, data, K, experimental_condition, param_history = param_history, hyperparameter_std = 3, n_iter = n_iter)
             end = time.time()
             print('\nTraining took {} seconds'.format(round(end - start))) 
-            pickle.dump((trace, losses, lppds, param_history, init, lrs, gradient_norms, end),open("ppca_experiment_transfer_{}_ppcas_{}_seed_{}.p".format(K,str(experimental_condition), seed), "wb" ))
+            pickle.dump((trace, losses, lppds, param_history, init, lrs, gradient_norms, end),open(filename, "wb" ))
