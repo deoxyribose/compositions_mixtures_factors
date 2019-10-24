@@ -154,6 +154,7 @@ def probability_of_negative_slope(loss, window):
         recent = loss[-window:]
         # estimate slope by least squares
         m_hat = np.linalg.lstsq(np.vstack([np.arange(window), np.ones(window)]).T,recent, rcond=None)[0][0]
+        m_hat = np.abs(m_hat)
         # estimate standard deviation of losses in window
         s_hat = np.array(recent).std(ddof=2)
         # calculate probability that slope is less than 0
