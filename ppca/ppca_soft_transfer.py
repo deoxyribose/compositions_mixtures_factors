@@ -14,7 +14,7 @@ import pickle
 import os
 import pandas as pd
 import xarray as xr
-from scipy.stats import norm
+import scipy.stats as sps
 import argparse
 from sklearn.decomposition import PCA
 import gc
@@ -147,19 +147,25 @@ def guide(X, batch_size, hyperparameters):
         cov_factor = cov_factor.transpose(0,1)
     return loc, cov_factor, cov_diag
 
-def probability_of_negative_slope(loss, window):
+#def probability_of_negative_slope(loss, window):
+#    if len(loss) < window:
+#        return 1
+#    else:
+#        recent = loss[-window:]
+#        # estimate slope by least squares
+#        m_hat = np.linalg.lstsq(np.vstack([np.arange(window), np.ones(window)]).T,recent, rcond=None)[0][0]
+#        m_hat = np.abs(m_hat)
+#        # estimate standard deviation of losses in window
+#        s_hat = np.array(recent).std(ddof=2)
+#        # calculate probability that slope is less than 0
+#        P_negative_slope = norm.cdf(0,loc=m_hat,scale=12*s_hat**2/(window**3-window))
+#        return P_negative_slope
+def p_value_of_slope(loss, window):
     if len(loss) < window:
-        return 1
+        return 0
     else:
         recent = loss[-window:]
-        # estimate slope by least squares
-        m_hat = np.linalg.lstsq(np.vstack([np.arange(window), np.ones(window)]).T,recent, rcond=None)[0][0]
-        m_hat = np.abs(m_hat)
-        # estimate standard deviation of losses in window
-        s_hat = np.array(recent).std(ddof=2)
-        # calculate probability that slope is less than 0
-        P_negative_slope = norm.cdf(0,loc=m_hat,scale=12*s_hat**2/(window**3-window))
-        return P_negative_slope
+        return sps.linregress(np.arange(window),recent)[3]
 
 def inference(model, guide, data, K, experimental_condition = 0, param_history = None, hyperparameter_std = 1, track_params = True, n_iter = 20000):
 
@@ -228,7 +234,11 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
         lppd = compute_lppd(model, test_data, init, n_samples=5000)
         lppds.append(-lppd)
         print(lppds[-1])
-    while probability_of_negative_slope(lppds,10) > 0.5 and i < n_iter:
+    # we train if the slope is significantly different from 0
+    # we prefer to infer that the slope is significantly different even if it isn't
+    # to inferring that the slope is 0 even if it isn't
+    # so we'd rather train too long than stop training too early
+    while p_value_of_slope(lppds,10) < 0.3 and i < n_iter:
         loss = svi.step(data, batch_size, init)
         if i % window or i <= window:
             print('.', end='')
@@ -303,7 +313,8 @@ if __name__ == '__main__':
             pyro.set_rng_seed(args.initseed)
             filename = "ppca_soft_transfer_{}_ppcas_{}_dataseed_{}_initseed_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed)
             if os.path.exists(filename):
-                data, _, param_history, _, _, _, _, _ = pickle.load(filename, 'rb')
+                trace, _, param_history, _, _, _, _, _ = pickle.load(open(filename, 'rb'))
+                data = trace.nodes['obs']['value']
                 print("Model has been run before, loading data and continuing.")
                 continue
             start = time.time()
