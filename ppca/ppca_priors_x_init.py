@@ -230,7 +230,7 @@ if __name__ == '__main__':
     model_prior_std = 3
     proportion_of_data_for_testing = 0.2
     n_lppd_samples = 5000
-    
+
     # optimization parameters
     initial_learning_rate = 0.1
     momentum1 = 0.9
@@ -242,54 +242,50 @@ if __name__ == '__main__':
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_pvalue_significance = 0.3 # p_value of slope has to be smaller than this for training to continue
 
-    def train_K_models_in_all_experimental_conditions(N,D,model_prior_std):
-        ####################
-        # generate data
-        trueK = D//3
-        K = trueK
-        prior_std = 1
-        trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(N,D))
-        logp = trace.log_prob_sum()
-        true_variables = [trace.nodes[name]["value"] for name in trace.stochastic_nodes]
-        _,true_scale,_,true_cov_factor,_,all_data = true_variables
-        test_idxs = np.random.choice(N,size=int(N*proportion_of_data_for_testing),replace=False)
-        mask = np.ones(all_data.shape[0],dtype=bool)
-        mask[test_idxs] = False
-        data = all_data[mask]
-        test_data = all_data[~mask]
-        N = data.shape[0]
-
-        #####################
-        # train models
-        for experimental_condition in range(n_experimental_conditions):
-            for K in range(1,Kmax+1):
-                pyro.set_rng_seed(args.initseed)
-                # all K=1 models, seeds and data are identical, so just load it
-                if experimental_condition > 0 and K == 1:
-                    K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}.p".format(1,str(0), args.dataseed, args.initseed)
-                    _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
-                    continue
-                filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
-                # if experiment gets interrepted, continue from loaded results
-                if os.path.exists(filename):
-                    _,_,_,param_history,_,_,_ = pickle.load(open(filename, 'rb'))
-                    data = trace.nodes['obs']['value']
-                    print("Model has been run before, loading data and continuing.")
-                    continue
-
-                if experimental_condition == 0 and K == 1:
-                    param_history = None
-                start = time.time()
-                print('\nTraining model with {} ppcas'.format(K))
-                inference_results = inference(model, guide, data, K, experimental_condition, param_history = param_history, prior_std = model_prior_std, n_iter = max_n_iter)
-                losses, lppds, param_history, init, gradient_norms = inference_results
-                end = time.time()
-                print('\nTraining took {} seconds'.format(round(end - start))) 
-        ########################
-        # save models
-                pickle.dump((trace, losses, lppds, param_history, init, gradient_norms, round(end - start)),open(filename, "wb" ))
-
     for N in [100,1000,10000]:
         for D in [10,20,30]:
             for model_prior_std in [0.5,3,5]:
-                train_K_models_in_all_experimental_conditions(N,D,model_prior_std)
+                ####################
+                # generate data
+                trueK = D//3
+                K = trueK
+                prior_std = 1
+                trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(N,D))
+                logp = trace.log_prob_sum()
+                true_variables = [trace.nodes[name]["value"] for name in trace.stochastic_nodes]
+                _,true_scale,_,true_cov_factor,_,all_data = true_variables
+                test_idxs = np.random.choice(N,size=int(N*proportion_of_data_for_testing),replace=False)
+                mask = np.ones(all_data.shape[0],dtype=bool)
+                mask[test_idxs] = False
+                data = all_data[mask]
+                test_data = all_data[~mask]
+                N = data.shape[0]
+                #####################
+                # train models
+                prior_std = model_prior_std
+                for experimental_condition in range(n_experimental_conditions):
+                    for K in range(1,Kmax+1):
+                        pyro.set_rng_seed(args.initseed)
+                        # all K=1 models, seeds and data are identical, so just load it
+                        if experimental_condition > 0 and K == 1:
+                            K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}.p".format(1,str(0), args.dataseed, args.initseed)
+                            _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
+                            continue
+                        filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
+                        # if experiment gets interrepted, continue from loaded results
+                        if os.path.exists(filename):
+                            _,_,_,param_history,_,_,_ = pickle.load(open(filename, 'rb'))
+                            data = trace.nodes['obs']['value']
+                            print("Model has been run before, loading data and continuing.")
+                            continue
+                        if experimental_condition == 0 and K == 1:
+                            param_history = None
+                        start = time.time()
+                        print('\nTraining model with {} ppcas with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
+                        inference_results = inference(model, guide, data, K, experimental_condition, param_history = param_history, prior_std = model_prior_std, n_iter = max_n_iter)
+                        losses, lppds, param_history, init, gradient_norms = inference_results
+                        end = time.time()
+                        print('\nTraining took {} seconds'.format(round(end - start))) 
+                ########################
+                # save models
+                        pickle.dump((trace, losses, lppds, param_history, init, gradient_norms, round(end - start)),open(filename, "wb" ))
