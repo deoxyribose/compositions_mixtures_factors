@@ -268,7 +268,7 @@ if __name__ == '__main__':
                         pyro.set_rng_seed(args.initseed)
                         # all K=1 models, seeds and data are identical, so just load it
                         if experimental_condition > 0 and K == 1:
-                            K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}.p".format(1,str(0), args.dataseed, args.initseed)
+                            K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
                             _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
                             continue
                         filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
