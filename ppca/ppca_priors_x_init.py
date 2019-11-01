@@ -265,10 +265,10 @@ if __name__ == '__main__':
                     for K in range(1,Kmax+1):
                         pyro.set_rng_seed(args.initseed)
                         # all K=1 models, seeds and data are identical, so just load it
-                        #if experimental_condition > 0 and K == 1:
-                        #    K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
-                        #    _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
-                        #    continue
+                        if experimental_condition > 0 and K == 1:
+                            K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
+                            _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
+                            continue
                         filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
                         # if experiment gets interrepted, continue from loaded results
                         if os.path.exists(filename):
@@ -280,7 +280,6 @@ if __name__ == '__main__':
                             param_history = None
                         start = time.time()
                         print('\nTraining model with {} ppcas with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
-                        continue
                         inference_results = inference(model, guide, data, K, experimental_condition, param_history = param_history, prior_std = model_prior_std, n_iter = max_n_iter)
                         losses, lppds, param_history, init, gradient_norms = inference_results
                         end = time.time()
