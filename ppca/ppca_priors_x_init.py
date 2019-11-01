@@ -222,12 +222,9 @@ if __name__ == '__main__':
 
     N = 1000
     D = 30
-    trueK = D//3
-    Kmax = D//2
     n_experimental_conditions = 4
     max_n_iter = 10000
     dgp_prior_std = 1
-    model_prior_std = 3
     proportion_of_data_for_testing = 0.2
     n_lppd_samples = 5000
 
@@ -242,19 +239,20 @@ if __name__ == '__main__':
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_pvalue_significance = 0.3 # p_value of slope has to be smaller than this for training to continue
 
-    for N in [100,1000,10000]:
+    for totalN in [100,1000,10000]:
         for D in [10,20,30]:
             for model_prior_std in [0.5,3,5]:
                 ####################
                 # generate data
                 trueK = D//3
                 K = trueK
+                Kmax = D//2
                 prior_std = 1
-                trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(N,D))
+                trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D))
                 logp = trace.log_prob_sum()
                 true_variables = [trace.nodes[name]["value"] for name in trace.stochastic_nodes]
                 _,true_scale,_,true_cov_factor,_,all_data = true_variables
-                test_idxs = np.random.choice(N,size=int(N*proportion_of_data_for_testing),replace=False)
+                test_idxs = np.random.choice(totalN,size=int(totalN*proportion_of_data_for_testing),replace=False)
                 mask = np.ones(all_data.shape[0],dtype=bool)
                 mask[test_idxs] = False
                 data = all_data[mask]
@@ -267,10 +265,10 @@ if __name__ == '__main__':
                     for K in range(1,Kmax+1):
                         pyro.set_rng_seed(args.initseed)
                         # all K=1 models, seeds and data are identical, so just load it
-                        if experimental_condition > 0 and K == 1:
-                            K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
-                            _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
-                            continue
+                        #if experimental_condition > 0 and K == 1:
+                        #    K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
+                        #    _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
+                        #    continue
                         filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
                         # if experiment gets interrepted, continue from loaded results
                         if os.path.exists(filename):
@@ -282,6 +280,7 @@ if __name__ == '__main__':
                             param_history = None
                         start = time.time()
                         print('\nTraining model with {} ppcas with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
+                        continue
                         inference_results = inference(model, guide, data, K, experimental_condition, param_history = param_history, prior_std = model_prior_std, n_iter = max_n_iter)
                         losses, lppds, param_history, init, gradient_norms = inference_results
                         end = time.time()
