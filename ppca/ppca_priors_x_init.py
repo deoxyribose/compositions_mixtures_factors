@@ -142,7 +142,7 @@ def p_value_of_slope(loss, window):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def inference(model, guide, data, K, experimental_condition = 0, param_history = None, prior_std = 1, track_params = True, n_iter = 20000):
+def inference(model, guide, data, K, experimental_condition = 0, param_history = None, prior_std = 1, track_params = True, n_iter = 20000, batch_size = 10, n_lppd_samples = 1600):
 
     def per_param_callable(module_name, param_name):
         if 'new' in param_name or not experimental_condition or K==1:
@@ -180,8 +180,9 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
     # optimize
     i = 0
     raw_batch_size = batch_size
+    max_n_lppd_samples = n_lppd_samples
     lppds = []
-    n_lppd_samples = n_lppd_samples//10
+    n_lppd_samples = n_lppd_samples//8
     #with torch.no_grad():
     #    lppd = compute_lppd(model, test_data, init, n_samples=n_lppd_samples)
     #    lppds.append(-lppd)
@@ -202,12 +203,14 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
                 print(lppds[-1])
 
             n_lppd_samples += 8*4
-            n_lppd_samples = min(n_lppd_samples, 800)
+            n_lppd_samples = min(n_lppd_samples, max_n_lppd_samples)
 
             raw_batch_size += 2
-            batch_size = min(1000,int(raw_batch_size))
+            batch_size = min(256,int(raw_batch_size))
 
             svi.num_samples += 1
+            svi.num_samples = min(100,svi.num_samples)
+
             print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
             print('\nSetting number of posterior samples {}'.format(n_lppd_samples), end='')
             print('\nSetting batch size to {}'.format(batch_size), end='')
@@ -256,7 +259,7 @@ if __name__ == '__main__':
     max_n_iter = 10000
     dgp_prior_std = 1
     proportion_of_data_for_testing = 0.2
-    n_lppd_samples = 800
+    n_lppd_samples = 1600
 
     # optimization parameters
     initial_learning_rate = 0.1
@@ -270,8 +273,8 @@ if __name__ == '__main__':
     slope_pvalue_significance = 0.3 # p_value of slope has to be smaller than this for training to continue
 
     for totalN in [1000,10000]:
-        for D in [10,500]:
-            for model_prior_std in [3,8]:
+        for D in [50,500]:
+            for model_prior_std in [1,5]:
                 ####################
                 # generate data
                 trueK = D//3
