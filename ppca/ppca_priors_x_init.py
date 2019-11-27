@@ -40,6 +40,20 @@ def set_incremental_priors():
     cov_scale_init[:K-1,:] = prev_posterior_scale
     return param_history['scale_loc'][-1].detach(),param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init
 
+def set_incremental_variational_parameter_init():
+    print('Setting variational parameters to those learnt by previous model.')
+    if K == 2:
+        prev_posterior_loc = param_history['cov_factor_loc_{}'.format(K-1)][-1].detach()
+        prev_posterior_scale = param_history['cov_factor_scale_{}'.format(K-1)][-1].detach()
+    else:
+        prev_posterior_loc = torch.cat([param_history['cov_factor_loc_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_loc_{}'.format(K-1)][-1].detach(),dim=0)])
+        prev_posterior_scale = torch.cat([param_history['cov_factor_scale_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_scale_{}'.format(K-1)][-1].detach(),dim=0)])
+    cov_loc_init = torch.randn(K,D)
+    cov_loc_init[:K-1,:] = prev_posterior_loc
+    cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
+    cov_scale_init[:K-1,:] = prev_posterior_scale
+    return param_history['scale_loc'][-1].detach(),param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init
+
 def set_random_variational_parameter_init():
     scaleloc = torch.randn(1)
     scalescale = torch.abs(torch.randn(1))
@@ -52,11 +66,11 @@ def get_h_and_v_params(experimental_condition = 0):
         return set_uninformative_priors(), set_random_variational_parameter_init()
     if experimental_condition == 1:
         # since incremental variational parameters are the same as the incremental prior parameters
-        return set_uninformative_priors(), set_incremental_priors()
+        return set_uninformative_priors(), set_incremental_variational_parameter_init()
     if experimental_condition == 2:
         return set_incremental_priors(), set_random_variational_parameter_init()
     if experimental_condition == 3:
-        return set_incremental_priors(), set_incremental_priors()
+        return set_incremental_priors(), set_incremental_variational_parameter_init()
 
 def dgp(X): # data generating process
     N, D = X.shape
@@ -167,10 +181,11 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
     i = 0
     raw_batch_size = batch_size
     lppds = []
-    with torch.no_grad():
-        lppd = compute_lppd(model, test_data, init, n_samples=n_lppd_samples)
-        lppds.append(-lppd)
-        print(lppds[-1])
+    n_lppd_samples = n_lppd_samples//10
+    #with torch.no_grad():
+    #    lppd = compute_lppd(model, test_data, init, n_samples=n_lppd_samples)
+    #    lppds.append(-lppd)
+    #    print(lppds[-1])
     # we train if the slope is significantly different from 0
     # we prefer to infer that the slope is non-zero even if it is zero
     # to inferring that the slope is 0 when it isn't
@@ -185,8 +200,17 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
                 lppd = compute_lppd(model, test_data, init, n_samples=n_lppd_samples)
                 lppds.append(-lppd)
                 print(lppds[-1])
-            #print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
-            #print('\nSetting batch size to {}'.format(batch_size), end='')
+
+            n_lppd_samples += 8*4
+            n_lppd_samples = min(n_lppd_samples, 800)
+
+            raw_batch_size += 2
+            batch_size = min(1000,int(raw_batch_size))
+
+            svi.num_samples += 1
+            print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
+            print('\nSetting number of posterior samples {}'.format(n_lppd_samples), end='')
+            print('\nSetting batch size to {}'.format(batch_size), end='')
         losses.append(loss)
         if track_params:
             # take one svi step to populate the param store
@@ -197,16 +221,22 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
     params = pyro.get_param_store()
     return losses, lppds, param_history, init, gradient_norms
 
-def compute_lppd(model, data, hyperparameters, n_samples = 5000):
+def compute_lppd(model, data, hyperparameters, n_samples = 800):
     unconditioned_model = pyro.poutine.uncondition(model)
     dummy_obs = data[0:1,:]
-    sum_of_probs = 0
-    for _ in range(n_samples):
-        guide_trace = pyro.poutine.trace(guide).get_trace(dummy_obs, 1, hyperparameters)
-        blockreplay = pyro.poutine.block(fn = pyro.poutine.replay(unconditioned_model, guide_trace),expose=['loc','obs'])
-        posterior_predictive = pyro.poutine.trace(blockreplay).get_trace(dummy_obs, 1, hyperparameters)
-        sum_of_probs += torch.exp(posterior_predictive.nodes['obs']['fn'].log_prob(data))
-    return torch.log(sum_of_probs/n_samples).mean()
+    n_blocks = 8
+    predictive_probs = torch.zeros((n_blocks, data.shape[0]))
+    block_length = n_samples//n_blocks
+    log_probs = torch.zeros((block_length, data.shape[0]))
+    for block in range(8):
+        for model_idx in range(block_length):
+            guide_trace = pyro.poutine.trace(guide).get_trace(dummy_obs, 1, hyperparameters)
+            blockreplay = pyro.poutine.block(fn = pyro.poutine.replay(unconditioned_model, guide_trace),expose=['loc','obs'])
+            posterior_predictive = pyro.poutine.trace(blockreplay).get_trace(dummy_obs, 1, hyperparameters)
+            log_probs[model_idx] = posterior_predictive.nodes['obs']['fn'].log_prob(data)
+        probs = torch.logsumexp(log_probs,dim=0)-np.log(np.float(block_length))
+        predictive_probs[block] = probs
+    return (torch.logsumexp(predictive_probs,dim=0)-np.log(np.float(n_blocks))).mean()
 
 if __name__ == '__main__':
 
@@ -226,7 +256,7 @@ if __name__ == '__main__':
     max_n_iter = 10000
     dgp_prior_std = 1
     proportion_of_data_for_testing = 0.2
-    n_lppd_samples = 5000
+    n_lppd_samples = 800
 
     # optimization parameters
     initial_learning_rate = 0.1
@@ -239,9 +269,9 @@ if __name__ == '__main__':
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_pvalue_significance = 0.3 # p_value of slope has to be smaller than this for training to continue
 
-    for totalN in [100,1000,10000]:
-        for D in [10,20,30]:
-            for model_prior_std in [0.5,3,5]:
+    for totalN in [1000,10000]:
+        for D in [10,500]:
+            for model_prior_std in [3,8]:
                 ####################
                 # generate data
                 trueK = D//3
