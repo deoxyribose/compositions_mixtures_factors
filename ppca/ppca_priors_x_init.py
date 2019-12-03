@@ -29,30 +29,39 @@ def set_uninformative_priors():
 def set_incremental_priors():
     print('Setting priors to posterior learnt by previous model.')
     if K == 2:
-        prev_posterior_loc = param_history['cov_factor_loc_{}'.format(K-1)][-1].detach()
-        prev_posterior_scale = param_history['cov_factor_scale_{}'.format(K-1)][-1].detach()
+        prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
+        prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
     else:
-        prev_posterior_loc = torch.cat([param_history['cov_factor_loc_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_loc_{}'.format(K-1)][-1].detach(),dim=0)])
-        prev_posterior_scale = torch.cat([param_history['cov_factor_scale_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_scale_{}'.format(K-1)][-1].detach(),dim=0)])
+        cov_factor_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
+        cov_factor_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
+        cov_factor_new_loc = torch.tensor(param_history['cov_factor_new_loc_{}'.format(K-1)])
+        cov_factor_new_scale = torch.tensor(param_history['cov_factor_new_scale_{}'.format(K-1)])
+
+        prev_posterior_loc = torch.cat([cov_factor_loc,torch.unsqueeze(cov_factor_new_loc,dim=0)])
+        prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
     cov_loc_init = torch.zeros(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
     cov_scale_init = prior_std*torch.ones(K,D)
     cov_scale_init[:K-1,:] = prev_posterior_scale
-    return param_history['scale_loc'][-1].detach(),param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init
+    return torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
 def set_incremental_variational_parameter_init():
     print('Setting variational parameters to those learnt by previous model.')
     if K == 2:
-        prev_posterior_loc = param_history['cov_factor_loc_{}'.format(K-1)][-1].detach()
-        prev_posterior_scale = param_history['cov_factor_scale_{}'.format(K-1)][-1].detach()
+        prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
+        prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
     else:
-        prev_posterior_loc = torch.cat([param_history['cov_factor_loc_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_loc_{}'.format(K-1)][-1].detach(),dim=0)])
-        prev_posterior_scale = torch.cat([param_history['cov_factor_scale_{}'.format(K-1)][-1].detach(),torch.unsqueeze(param_history['cov_factor_new_scale_{}'.format(K-1)][-1].detach(),dim=0)])
+        cov_factor_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
+        cov_factor_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
+        cov_factor_new_loc = torch.tensor(param_history['cov_factor_new_loc_{}'.format(K-1)])
+        cov_factor_new_scale = torch.tensor(param_history['cov_factor_new_scale_{}'.format(K-1)])
+        prev_posterior_loc = torch.cat([cov_factor_loc,torch.unsqueeze(cov_factor_new_loc,dim=0)])
+        prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
     cov_loc_init = torch.randn(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
     cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
     cov_scale_init[:K-1,:] = prev_posterior_scale
-    return param_history['scale_loc'][-1].detach(),param_history['scale_scale'][-1].detach(),cov_loc_init,cov_scale_init
+    return torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
 def set_random_variational_parameter_init():
     scaleloc = torch.randn(1)
@@ -222,7 +231,11 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
         i += 1
     print('\nConverged in {} iterations.\n'.format(i))
     params = pyro.get_param_store()
-    return losses, lppds, param_history, init, gradient_norms
+    # make all pytorch tensors into np arrays, which consume less disk space
+    param_history = dict(zip(param_history.keys(),map(lambda x: x.detach().numpy(), param_history.values())))
+    # save just last values, since that's all we need for incremental inference, and the rest fills too much space
+    last_params = dict(zip(param_history.keys(), map(lambda x: x[-1], param_history.values())))
+    return losses, lppds, last_params, init, gradient_norms
 
 def compute_lppd(model, data, hyperparameters, n_samples = 800):
     unconditioned_model = pyro.poutine.uncondition(model)
@@ -277,9 +290,9 @@ if __name__ == '__main__':
             for model_prior_std in [1,5]:
                 ####################
                 # generate data
-                trueK = D//3
+                trueK = D//5#D//3
                 K = trueK
-                Kmax = D//2
+                Kmax = D//4#D//2
                 prior_std = 1
                 trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D))
                 logp = trace.log_prob_sum()
@@ -300,17 +313,17 @@ if __name__ == '__main__':
                         # all K=1 models, seeds and data are identical, so just load it
                         if experimental_condition > 0 and K == 1:
                             K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
-                            _,_,_,param_history,_,_,_ = pickle.load(open(K1model, 'rb'))
+                            _,_,_,param_history,_ = pickle.load(open(K1model, 'rb'))
                             continue
+                        elif experimental_condition == 0:
+                            param_history = None
                         filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
                         # if experiment gets interrepted, continue from loaded results
                         if os.path.exists(filename):
-                            _,_,_,param_history,_,_,_ = pickle.load(open(filename, 'rb'))
+                            _,_,_,param_history,_ = pickle.load(open(filename, 'rb'))
                             data = trace.nodes['obs']['value']
                             print("Model has been run before, loading data and continuing.")
                             continue
-                        if experimental_condition == 0 and K == 1:
-                            param_history = None
                         start = time.time()
                         print('\nTraining model with {} ppcas with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
                         inference_results = inference(model, guide, data, K, experimental_condition, param_history = param_history, prior_std = model_prior_std, n_iter = max_n_iter)
@@ -319,4 +332,4 @@ if __name__ == '__main__':
                         print('\nTraining took {} seconds'.format(round(end - start))) 
                 ########################
                 # save models
-                        pickle.dump((trace, losses, lppds, param_history, init, gradient_norms, round(end - start)),open(filename, "wb" ))
+                        pickle.dump((trace, losses, lppds, param_history, round(end - start)),open(filename, "wb" ))
