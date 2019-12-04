@@ -215,10 +215,10 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
             n_lppd_samples = min(n_lppd_samples, max_n_lppd_samples)
 
             raw_batch_size += 2
-            batch_size = min(256,int(raw_batch_size))
+            batch_size = min(64,int(raw_batch_size))
 
             svi.num_samples += 1
-            svi.num_samples = min(100,svi.num_samples)
+            svi.num_samples = min(64,svi.num_samples)
 
             print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
             print('\nSetting number of posterior samples {}'.format(n_lppd_samples), end='')
@@ -290,9 +290,9 @@ if __name__ == '__main__':
             for model_prior_std in [1,5]:
                 ####################
                 # generate data
-                trueK = D//5#D//3
+                trueK = 4#D//3
                 K = trueK
-                Kmax = D//4#D//2
+                Kmax = 8#D//2
                 prior_std = 1
                 trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D))
                 logp = trace.log_prob_sum()
