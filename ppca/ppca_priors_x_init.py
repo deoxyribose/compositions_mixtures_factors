@@ -191,7 +191,8 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
     raw_batch_size = batch_size
     max_n_lppd_samples = n_lppd_samples
     lppds = []
-    n_lppd_samples = n_lppd_samples//8
+    #n_lppd_samples = n_lppd_samples//8
+
     #with torch.no_grad():
     #    lppd = compute_lppd(model, test_data, init, n_samples=n_lppd_samples)
     #    lppds.append(-lppd)
@@ -266,8 +267,6 @@ if __name__ == '__main__':
     ####################
     # define parameters shared between conditions
 
-    N = 1000
-    D = 30
     n_experimental_conditions = 4
     max_n_iter = 10000
     dgp_prior_std = 1
@@ -283,11 +282,11 @@ if __name__ == '__main__':
     n_elbo_mc_samples = 10
     window = 50 # compute lppd every window iterations
     convergence_window = 10 # estimate slope of convergence_window lppds
-    slope_pvalue_significance = 0.3 # p_value of slope has to be smaller than this for training to continue
+    slope_pvalue_significance = 0.5 # p_value of slope has to be smaller than this for training to continue
 
     for totalN in [1000,10000]:
         for D in [50,500]:
-            for model_prior_std in [1,5]:
+            for model_prior_std in [1,3]:
                 ####################
                 # generate data
                 trueK = 4#D//3
