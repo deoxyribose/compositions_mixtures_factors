@@ -274,13 +274,13 @@ if __name__ == '__main__':
     n_lppd_samples = 1600
 
     # optimization parameters
-    initial_learning_rate = 0.1
+    initial_learning_rate = 0.3
     momentum1 = 0.9
     momentum2 = 0.999
-    decay_exponent = 0.99995
+    decay_exponent = 1.
     batch_size = 10
     n_elbo_mc_samples = 10
-    window = 50 # compute lppd every window iterations
+    window = 10 # compute lppd every window iterations
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_pvalue_significance = 0.5 # p_value of slope has to be smaller than this for training to continue
 
@@ -291,7 +291,8 @@ if __name__ == '__main__':
                 # generate data
                 trueK = 4#D//3
                 K = trueK
-                Kmax = 8#D//2
+                #Kmax = 8#D//2
+                Kmax = 1#D//2
                 prior_std = 1
                 trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D))
                 logp = trace.log_prob_sum()
