@@ -216,10 +216,10 @@ def inference(model, guide, data, K, experimental_condition = 0, param_history =
             n_lppd_samples = min(n_lppd_samples, max_n_lppd_samples)
 
             raw_batch_size += 2
-            batch_size = min(64,int(raw_batch_size))
+            batch_size = min(16,int(raw_batch_size))
 
             svi.num_samples += 1
-            svi.num_samples = min(64,svi.num_samples)
+            svi.num_samples = min(10,svi.num_samples)
 
             print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
             print('\nSetting number of posterior samples {}'.format(n_lppd_samples), end='')
@@ -274,7 +274,7 @@ if __name__ == '__main__':
     n_lppd_samples = 1600
 
     # optimization parameters
-    initial_learning_rate = 0.3
+    initial_learning_rate = 0.1
     momentum1 = 0.9
     momentum2 = 0.999
     decay_exponent = 1.
