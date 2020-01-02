@@ -21,7 +21,7 @@ sys.path.append("..")
 from tracepredictive import *
 from inference import *
 from models_and_guides import *
-from plotting import *
+#from plotting import *
 
 pyro.set_rng_seed(42)
 N, D = 1000, 2
