@@ -5,7 +5,6 @@ import pickle
 import matplotlib.pylab as plt
 from IPython.display import display, clear_output
 import torch
-import torchvision
 import scipy.stats as sps
 from os import listdir
 from os.path import isfile, join
