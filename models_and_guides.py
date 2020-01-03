@@ -41,6 +41,56 @@ def independentGaussianGuide(X, batch_size, variational_parameter_initialization
         scale = pyro.sample('scale', dst.LogNormal(scaleloc, scalescale))
     return loc, scale
 
+
+def incrementalPpca(X, batch_size, prior_parameters):
+    N, D = X.shape
+    prior_parameters,_ = prior_parameters
+    K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale = prior_parameters
+    cov_diag = pyro.sample('scale', dst.LogNormal(scaleloc, scalescale))
+    cov_diag = cov_diag*torch.ones(D)
+    with pyro.plate('D', D):
+        cov_factor = None
+        if K > 1:
+            with pyro.plate('K', K-1):
+                cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc[:K-1,:],cov_factor_scale[:K-1,:]))
+            cov_factor_new = pyro.sample('cov_factor_new', dst.Normal(cov_factor_loc[-1,:],cov_factor_scale[-1,:]))
+            cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+        else:
+            with pyro.plate('K', K):
+                cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc,cov_factor_scale))
+        cov_factor = cov_factor.transpose(0,1)
+    with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
+        X = pyro.sample('obs', dst.LowRankMultivariateNormal(torch.zeros(D), cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
+    return X
+
+def incrementalPpcaGuide(X, batch_size, variational_parameter_initialization):
+    N, D = X.shape
+    _,variational_parameter_initialization = variational_parameter_initialization
+    K, scaleloc, scalescale, cov_factor_loc_init, cov_factor_scale_init = variational_parameter_initialization
+    cov_diag_loc = pyro.param('scale_loc', scaleloc)
+    cov_diag_scale = pyro.param('scale_scale', scalescale, constraint=constraints.positive)
+    cov_diag = pyro.sample('scale', dst.LogNormal(cov_diag_loc, cov_diag_scale))
+    cov_diag = cov_diag*torch.ones(D)
+    with pyro.plate('D', D, dim=-1):
+        cov_factor = None
+        if K > 1:
+            with pyro.plate('K', K-1, dim=-2):
+                cov_factor_loc = pyro.param('cov_factor_loc_{}'.format(K), cov_factor_loc_init[:K-1,:])
+                cov_factor_scale = pyro.param('cov_factor_scale_{}'.format(K), cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
+                cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc, cov_factor_scale))
+            cov_factor_new_loc = pyro.param('cov_factor_new_loc_{}'.format(K), cov_factor_loc_init[-1,:])
+            cov_factor_new_scale = pyro.param('cov_factor_new_scale_{}'.format(K), cov_factor_scale_init[-1,:], constraint=constraints.positive)
+            cov_factor_new = pyro.sample('cov_factor_new', dst.Normal(cov_factor_new_loc,cov_factor_new_scale))
+            cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+        else:
+            with pyro.plate('K', K):
+                cov_factor_loc = pyro.param('cov_factor_loc_{}'.format(K), cov_factor_loc_init)
+                cov_factor_scale = pyro.param('cov_factor_scale_{}'.format(K), cov_factor_scale_init, constraint=constraints.positive)
+                cov_factor = pyro.sample('cov_factor', dst.Normal(cov_factor_loc,cov_factor_scale))
+        cov_factor = cov_factor.transpose(0,1)
+    return cov_factor, cov_diag
+
+
 def factor(X, batch_size, prior_parameters):
     """
     Parameters are K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
