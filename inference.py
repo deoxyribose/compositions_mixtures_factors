@@ -120,4 +120,8 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
             return svi, losses, lppds, param_history, init, gradient_norms
     print('\nConverged in {} iterations.\n'.format(i))
     params = pyro.get_param_store()
-    return svi, losses, lppds, param_history, init, gradient_norms
+    # make all pytorch tensors into np arrays, which consume less disk space
+    param_history = dict(zip(param_history.keys(),map(lambda x: x.detach().numpy(), param_history.values())))
+    # save just last values, since that's all we need for incremental inference, and the rest fills too much space
+    last_params = dict(zip(param_history.keys(), map(lambda x: x[-1], param_history.values())))
+    return svi, losses, lppds, last_params, init, gradient_norms
