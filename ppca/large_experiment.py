@@ -121,6 +121,7 @@ if __name__ == '__main__':
     n_posterior_samples = 1600
 
     # optimization parameters
+    n_multistart = 10
     learning_rate = 0.05
     momentum1 = 0.9
     momentum2 = 0.999
@@ -173,12 +174,27 @@ if __name__ == '__main__':
                             continue
                         start = time.time()
                         print('\nTraining model with {} ppcas with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
-                        pyro.clear_param_store()
-                        init = get_h_and_v_params(K, experimental_condition, prior_std)
+                        
+                        best_loss_after_init = np.inf
+                        inits = []
+                        for restart in range(n_multistart):
+                            pyro.clear_param_store()
+                            # initialize
+                            init = get_h_and_v_params(K, experimental_condition, prior_std)
+                            # run 300 iterations
+                            inference_results = inference(incrementalPpca, incrementalPpcaGuide, data, test_data, init, 300, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                            _, _, lppds, _, _,_ = inference_results
+                            loss_after_init = sum(lppds[-3:])/3
+                            inits.append(lppds)
+                            if loss_after_init < best_loss_after_init:
+                                best_loss_after_init = loss_after_init
+                                best_init = init
+                        init = best_init
+
                         inference_results = inference(incrementalPpca, incrementalPpcaGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                         svi, losses, lppds, param_history, init, gradient_norms = inference_results
                         end = time.time()
                         print('\nTraining took {} seconds'.format(round(end - start))) 
                 ########################
                 # save models
-                        pickle.dump((trace, losses, lppds, param_history, round(end - start)),open(filename, "wb" ))
+                        pickle.dump((trace, losses, lppds, param_history, inits, round(end - start)),open(filename, "wb" ))
