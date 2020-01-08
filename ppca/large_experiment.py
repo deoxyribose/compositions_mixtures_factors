@@ -161,14 +161,14 @@ if __name__ == '__main__':
                         # all K=1 models, seeds and data are identical, so just load it
                         if experimental_condition > 0 and K == 1:
                             K1model = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,model_prior_std)
-                            _,_,_,param_history,_ = pickle.load(open(K1model, 'rb'))
+                            _,_,_,param_history,_,_ = pickle.load(open(K1model, 'rb'))
                             continue
                         elif experimental_condition == 0:
                             param_history = None
                         filename = "{}_ppcas_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,model_prior_std)
                         # if experiment gets interrepted, continue from loaded results
                         if os.path.exists(filename):
-                            _,_,_,param_history,_ = pickle.load(open(filename, 'rb'))
+                            _,_,_,param_history,_,_ = pickle.load(open(filename, 'rb'))
                             data = trace.nodes['obs']['value']
                             print("Model has been run before, loading data and continuing.")
                             continue
