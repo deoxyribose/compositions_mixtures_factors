@@ -115,7 +115,7 @@ if __name__ == '__main__':
     # define parameters shared between conditions
 
     n_experimental_conditions = 4
-    max_n_iter = 10000
+    max_n_iter = 1000
     dgp_prior_std = 1
     proportion_of_data_for_testing = 0.2
     n_posterior_samples = 1600
@@ -130,11 +130,11 @@ if __name__ == '__main__':
     n_mc_samples = 16
     window = 10 # compute lppd every window iterations
     convergence_window = 10 # estimate slope of convergence_window lppds
-    slope_significance = 0.5 # p_value of slope has to be smaller than this for training to continue
+    slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
     for totalN in [1000,10000]:
-        for D in [50,500]:
-            for model_prior_std in [1,3]:
+        for D in [20,30]: #[50,500]
+            for model_prior_std in [1.3,1.7]: #[1,3]
                 ####################
                 # generate data
                 trueK = 4#D//3
