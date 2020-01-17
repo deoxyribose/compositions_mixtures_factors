@@ -33,9 +33,11 @@ def set_uninformative_priors(K,prior_std):
 
 def set_random_variational_parameter_init(K,prior_std):
     scaleloc = torch.randn(1)
-    scalescale = prior_std*torch.abs(torch.randn(1))
+    scalescale = torch.abs(torch.randn(1))
+    #scalescale = prior_std*torch.abs(torch.randn(1))
     cov_factor_loc = torch.randn(K,D)
-    cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
+    cov_factor_scale = torch.abs(torch.randn(K,D))
+    #cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
     return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
 
 def set_incremental_priors(K,prior_std):
@@ -53,7 +55,8 @@ def set_incremental_priors(K,prior_std):
         prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
     cov_loc_init = torch.zeros(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
-    cov_scale_init = prior_std*torch.ones(K,D)
+    cov_scale_init = torch.ones(K,D)
+    #cov_scale_init = prior_std*torch.ones(K,D)
     cov_scale_init[:K-1,:] = prev_posterior_scale
     return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
@@ -71,7 +74,8 @@ def set_incremental_variational_parameter_init(K,prior_std):
         prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
     cov_loc_init = torch.randn(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
-    cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
+    cov_scale_init = torch.abs(torch.randn(K,D))
+    #cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
     cov_scale_init[:K-1,:] = prev_posterior_scale
     return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
@@ -115,7 +119,7 @@ if __name__ == '__main__':
     # define parameters shared between conditions
 
     n_experimental_conditions = 4
-    max_n_iter = 1000
+    max_n_iter = 800
     dgp_prior_std = 1
     proportion_of_data_for_testing = 0.2
     n_posterior_samples = 1600
@@ -133,11 +137,11 @@ if __name__ == '__main__':
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
     for totalN in [1000,10000]:
-        for D in [20,30]: #[50,500]
+        for D in [10,500]:#[20,30]: #
             for model_prior_std in [1.3,1.7]: #[1,3]
                 ####################
                 # generate data
-                trueK = 4#D//3
+                trueK = 10#D//3
                 K = trueK
                 #Kmax = 8#D//2
                 Kmax = 5#D//2
