@@ -137,8 +137,8 @@ if __name__ == '__main__':
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
-    for totalN in [1000,10000]:
-        for D in [10,500]:#[20,30]: #
+    for totalN in [1000]:#,10000]:
+        for D in [10]:#,500]:#[20,30]: #
             trueK = 7#D//3
             K = trueK
             trueinit = get_h_and_v_params(K,D,experimental_condition = None, prior_std = 1)
@@ -188,7 +188,7 @@ if __name__ == '__main__':
                         # initialize
                         init = get_h_and_v_params(K, D, experimental_condition, prior_std, data)
                         # run 300 iterations
-                        inference_results = inference(zeroMeanFactor, zeroMeanFactorGuide, data, test_data, init, 300, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                        inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, 300, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                         _, _, lppds, _, _,_ = inference_results
                         loss_after_init = sum(lppds[-3:])/3
                         inits.append(lppds)
@@ -196,7 +196,7 @@ if __name__ == '__main__':
                             best_loss_after_init = loss_after_init
                             best_init = init
                     init = best_init
-                    inference_results = inference(zeroMeanFactor, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                    inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                     svi, losses, lppds, param_history, init, gradient_norms = inference_results
                     end = time.time()
                     print('\nTraining took {} seconds'.format(round(end - start))) 
