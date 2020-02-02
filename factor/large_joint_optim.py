@@ -108,6 +108,17 @@ def get_h_and_v_params(K,D,experimental_condition = 0, prior_std = 1, data = Non
     #if experimental_condition == 4:
     #    return set_uninformative_priors(K, D, prior_std), set_PCA_variational_parameter_init(K,D,prior_std,data)
 
+def clone_init(init):
+    clone = [[],[]]
+    for i,parameter_set in enumerate(init):
+        for param in parameter_set:
+            if type(param) == torch.Tensor:
+                clone[i].append(param.clone().detach())
+            else:
+                clone[i].append(param)
+        clone[i] = tuple(clone[i])
+    return tuple(clone)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('dataseed', type=int, help='Random seed for generating data')
@@ -186,6 +197,7 @@ if __name__ == '__main__':
                         pyro.clear_param_store()
                         # initialize
                         init = get_h_and_v_params(K, D, experimental_condition, prior_std, data)
+                        initcopy = clone_init(init)
                         # run 300 iterations
                         inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, 300, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                         _, _, lppds, _, _,_ = inference_results
@@ -193,7 +205,7 @@ if __name__ == '__main__':
                         inits.append(lppds)
                         if loss_after_init < best_loss_after_init:
                             best_loss_after_init = loss_after_init
-                            best_init = init
+                            best_init = initcopy
                     init = best_init
                     inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                     svi, losses, lppds, param_history, init, gradient_norms = inference_results
