@@ -137,11 +137,10 @@ if __name__ == '__main__':
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
-    for totalN in [1000]:#,10000]:
-        for D in [10]:#,500]:#[20,30]: #
+    for totalN in [5000,10000]:
+        for D in [50,500]:#[20,30]: #
             trueK = 7#D//3
-            K = trueK
-            trueinit = get_h_and_v_params(K,D,experimental_condition = None, prior_std = 1)
+            trueinit = get_h_and_v_params(trueK,D,experimental_condition = None, prior_std = 1)
             dgp = pyro.poutine.uncondition(zeroMeanFactor)
             trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D),totalN,trueinit)
             logp = trace.log_prob_sum()
