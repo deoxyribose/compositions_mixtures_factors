@@ -31,7 +31,7 @@ def set_uninformative_priors(K,D,prior_std):
     return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
 
 def set_random_variational_parameter_init(K,D,prior_std):
-    scaleloc = torch.randn(D)
+    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
     scalescale = torch.abs(torch.randn(D))
     #scalescale = prior_std*torch.abs(torch.randn(1))
     cov_factor_loc = torch.randn(K,D)
@@ -40,7 +40,7 @@ def set_random_variational_parameter_init(K,D,prior_std):
     return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
 
 def set_PCA_variational_parameter_init(K,D,prior_std,data):
-    scaleloc = torch.randn(D)
+    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
     scalescale = torch.abs(torch.randn(D))
     #scalescale = prior_std*torch.abs(torch.randn(1))
     tmp = PCA(n_components=K)
@@ -51,7 +51,7 @@ def set_PCA_variational_parameter_init(K,D,prior_std,data):
     return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
 
 def set_incremental_priors(K,D,prior_std):
-    print('Setting priors to posterior learnt by previous model.')
+    print('Setting prior inits to posterior mode of previous model.')
     if K == 2:
         prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
         prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
@@ -71,7 +71,7 @@ def set_incremental_priors(K,D,prior_std):
     return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
 def set_incremental_variational_parameter_init(K,D,prior_std):
-    print('Setting variational parameters to those learnt by previous model.')
+    print('Setting variational parameter init to those learnt by previous model.')
     if K == 2:
         prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
         prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     n_posterior_samples = 1600
 
     # optimization parameters
-    n_multistart = 10
+    n_multistart = 6
     learning_rate = 0.05
     momentum1 = 0.9
     momentum2 = 0.999
@@ -150,6 +150,7 @@ if __name__ == '__main__':
 
     for totalN in [5000,10000]:
         for D in [50,500]:#[20,30]: #
+            print(totalN, D)
             trueK = 7#D//3
             trueinit = get_h_and_v_params(trueK,D,experimental_condition = None, prior_std = 1)
             dgp = pyro.poutine.uncondition(zeroMeanFactor)
@@ -185,7 +186,7 @@ if __name__ == '__main__':
                     if os.path.exists(filename):
                         _,_,_,param_history,_,_ = pickle.load(open(filename, 'rb'))
                         data = trace.nodes['obs']['value']
-                        print("Model has been run before, loading data and continuing.")
+                        print("Model has been run before, loading from {}.".format(filename))
                         continue
                     start = time.time()
                     print('\nTraining model with {} factors with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
@@ -199,7 +200,7 @@ if __name__ == '__main__':
                         init = get_h_and_v_params(K, D, experimental_condition, prior_std, data)
                         initcopy = clone_init(init)
                         # run 300 iterations
-                        inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, 300, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                        inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                         _, _, lppds, _, _,_ = inference_results
                         loss_after_init = sum(lppds[-3:])/3
                         inits.append(lppds)
