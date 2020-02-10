@@ -67,7 +67,7 @@ init = get_h_and_v_params(K,D,0,1,data)
 for K in range(1,25):
     if os.path.exists('{}.p'.format(K)):
         continue
-    with open('{}.p'.format(K), 'rb') as f:
+    with open('{}.p'.format(K), 'wb') as f:
         pickle.dump(([None]), f)
     filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
     if os.path.exists(filename):
