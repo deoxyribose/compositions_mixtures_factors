@@ -1,5 +1,3 @@
-%load_ext autoreload
-%autoreload 2
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -69,9 +67,11 @@ init = get_h_and_v_params(K,D,0,1,data)
 for K in range(1,25):
     filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
     if os.path.exists(filename):
+        print('{} exists, loading and continueing'.format(filename))
         continue
     for restart in range(n_multistart):
         if os.path.exists(filename):
+            print('{} completed, loading and continueing'.format(restart+1))
             with open(filename, 'rb') as f:
                 finished_restart,inference_results = pickle.load(f)
             if finished_restart > restart:
