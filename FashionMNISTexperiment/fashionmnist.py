@@ -42,7 +42,7 @@ plt.imshow(x_train[idx,:].reshape(-1,28));
 
 n_experimental_conditions = 2
 experimental_condition = 0
-max_n_iter = 3000
+max_n_iter = 1000
 n_posterior_samples = 1600
 # optimization parameters
 n_multistart = 10
