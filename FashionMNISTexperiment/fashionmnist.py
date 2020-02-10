@@ -74,7 +74,7 @@ for K in range(1,25):
             print('{} completed, loading and continueing'.format(restart+1))
             with open(filename, 'rb') as f:
                 finished_restart,inference_results = pickle.load(f)
-            if finished_restart > restart:
+            if finished_restart >= restart:
                 continue
         else:
             inference_results = []
