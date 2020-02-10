@@ -65,6 +65,10 @@ test_data = x_valid
 init = get_h_and_v_params(K,D,0,1,data)
 
 for K in range(1,25):
+    if os.path.exists('{}.p'.format(K)):
+        continue
+    with open('{}.p'.format(K), 'rb') as f:
+        pickle.dump(([None]), f)
     filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
     if os.path.exists(filename):
         print('{} exists, loading and continueing'.format(filename))
@@ -87,3 +91,4 @@ for K in range(1,25):
         inference_results.append(inference_result)
         with open(filename, 'wb') as f:
             pickle.dump((restart,inference_results), f)
+    os.remove('{}.p'.format(K)) 
