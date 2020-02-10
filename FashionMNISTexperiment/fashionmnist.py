@@ -87,8 +87,3 @@ for K in range(1,25):
         inference_results.append(inference_result)
         with open(filename, 'wb') as f:
             pickle.dump((restart,inference_results), f)
-
-filename = filename[:-2] + 'tmp' + str(restart) + '.p'
-
-filename
-
