@@ -87,7 +87,7 @@ for K in range(1,25):
         # initialize
         init = get_h_and_v_params(K, D, 0, 1, data)
         # run 300 iterations
-        inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance, track_params = True)
+        inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
         inference_results.append(inference_result)
         with open(filename, 'wb') as f:
             pickle.dump((restart,inference_results), f)
