@@ -10,8 +10,8 @@ paths = ["./"]
 pickle_jar = [path+f for path in paths for f in listdir(path) if isfile(join(path, f)) if f.endswith('.p')]
 
 for p in pickle_jar:
-	with open(p, "rb") as f:
-    	restart,inference_results = pickle.load(f)
+    with open(p, "rb") as f:
+        restart,inference_results = pickle.load(f)
     for restart in range(len(inference_results)):
         trace, losses, lppds, param_history, init, time = inference_results[restart]
         # save just last values, since that's all we need for incremental inference, and the rest fills too much space
