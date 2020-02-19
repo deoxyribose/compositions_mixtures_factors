@@ -15,98 +15,13 @@ import pandas as pd
 import xarray as xr
 import scipy.stats as sps
 import argparse
-from sklearn.decomposition import PCA
 import gc
 import sys
 sys.path.append("..")
 from tracepredictive import *
 from inference import *
 from models_and_guides import *
-
-def set_uninformative_priors(K,D,prior_std):
-    scaleloc = torch.zeros(D)
-    scalescale = prior_std*torch.ones(D)
-    cov_factor_loc = torch.zeros(K,D)
-    cov_factor_scale = prior_std*torch.ones(K,D)
-    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
-
-def set_random_variational_parameter_init(K,D,prior_std):
-    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
-    scalescale = torch.abs(torch.randn(D))
-    #scalescale = prior_std*torch.abs(torch.randn(1))
-    cov_factor_loc = torch.randn(K,D)
-    cov_factor_scale = torch.abs(torch.randn(K,D))
-    #cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
-    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
-
-def set_PCA_variational_parameter_init(K,D,prior_std,data):
-    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
-    scalescale = torch.abs(torch.randn(D))
-    #scalescale = prior_std*torch.abs(torch.randn(1))
-    tmp = PCA(n_components=K)
-    tmp.fit(data)
-    cov_factor_loc = torch.tensor(tmp.components_,dtype = torch.float32)
-    cov_factor_scale = torch.abs(torch.randn(K,D))
-    #cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
-    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
-
-def set_incremental_priors(K,D,prior_std):
-    print('Setting prior inits to posterior mode of previous model.')
-    if K == 2:
-        prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
-        prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
-    else:
-        cov_factor_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
-        cov_factor_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
-        cov_factor_new_loc = torch.tensor(param_history['cov_factor_new_loc_{}'.format(K-1)])
-        cov_factor_new_scale = torch.tensor(param_history['cov_factor_new_scale_{}'.format(K-1)])
-
-        prev_posterior_loc = torch.cat([cov_factor_loc,torch.unsqueeze(cov_factor_new_loc,dim=0)])
-        prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
-    cov_loc_init = torch.zeros(K,D)
-    cov_loc_init[:K-1,:] = prev_posterior_loc
-    cov_scale_init = torch.ones(K,D)
-    #cov_scale_init = prior_std*torch.ones(K,D)
-    cov_scale_init[:K-1,:] = prev_posterior_scale
-    return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
-
-def set_incremental_variational_parameter_init(K,D,prior_std):
-    print('Setting variational parameter init to those learnt by previous model.')
-    if K == 2:
-        prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
-        prev_posterior_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
-    else:
-        cov_factor_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
-        cov_factor_scale = torch.tensor(param_history['cov_factor_scale_{}'.format(K-1)])
-        cov_factor_new_loc = torch.tensor(param_history['cov_factor_new_loc_{}'.format(K-1)])
-        cov_factor_new_scale = torch.tensor(param_history['cov_factor_new_scale_{}'.format(K-1)])
-        prev_posterior_loc = torch.cat([cov_factor_loc,torch.unsqueeze(cov_factor_new_loc,dim=0)])
-        prev_posterior_scale = torch.cat([cov_factor_scale,torch.unsqueeze(cov_factor_new_scale,dim=0)])
-    cov_loc_init = torch.randn(K,D)
-    cov_loc_init[:K-1,:] = prev_posterior_loc
-    cov_scale_init = torch.abs(torch.randn(K,D))
-    #cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
-    cov_scale_init[:K-1,:] = prev_posterior_scale
-    return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
-
-def get_h_and_v_params(K,D,experimental_condition = 0, prior_std = 1, data = None):
-    assert D > 0
-    assert K > 0
-    if experimental_condition == 0:
-        #return set_uninformative_priors(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
-        return set_random_variational_parameter_init(K, D, prior_std), set_PCA_variational_parameter_init(K,D,prior_std,data)
-    if experimental_condition == 1:
-        # since incremental variational parameters are the same as the incremental prior parameters
-    #    return set_uninformative_priors(K, D, prior_std), set_incremental_variational_parameter_init(K, D, prior_std)
-        return set_incremental_priors(K, D, prior_std), set_incremental_variational_parameter_init(K, D, prior_std)
-    else:
-        return set_random_variational_parameter_init(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
-    #if experimental_condition == 2:
-    #    return set_incremental_priors(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
-    #if experimental_condition == 3:
-    #    return set_incremental_priors(K, D, prior_std), set_incremental_variational_parameter_init(K, D, prior_std)
-    #if experimental_condition == 4:
-    #    return set_uninformative_priors(K, D, prior_std), set_PCA_variational_parameter_init(K,D,prior_std,data)
+from initializations import *
 
 def clone_init(init):
     clone = [[],[]]
@@ -197,7 +112,7 @@ if __name__ == '__main__':
                         print('Multistart {}/{}'.format(restart+1,n_multistart))
                         pyro.clear_param_store()
                         # initialize
-                        init = get_h_and_v_params(K, D, experimental_condition, prior_std, data)
+                        init = get_h_and_v_params(K, D, experimental_condition, prior_std, data, param_history)
                         initcopy = clone_init(init)
                         # run 300 iterations
                         inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
