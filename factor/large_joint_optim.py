@@ -23,17 +23,6 @@ from inference import *
 from models_and_guides import *
 from initializations import *
 
-def clone_init(init):
-    clone = [[],[]]
-    for i,parameter_set in enumerate(init):
-        for param in parameter_set:
-            if type(param) == torch.Tensor:
-                clone[i].append(param.clone().detach())
-            else:
-                clone[i].append(param)
-        clone[i] = tuple(clone[i])
-    return tuple(clone)
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('dataseed', type=int, help='Random seed for generating data')

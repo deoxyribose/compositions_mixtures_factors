@@ -98,3 +98,15 @@ def get_h_and_v_params(K,D,experimental_condition = 0, prior_std = 1, data = Non
         return set_incremental_priors(K, D, prior_std, param_history), set_incremental_variational_parameter_init(K, D, prior_std, param_history)
     else:
         return set_random_variational_parameter_init(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
+
+
+def clone_init(init):
+    clone = [[],[]]
+    for i,parameter_set in enumerate(init):
+        for param in parameter_set:
+            if type(param) == torch.Tensor:
+                clone[i].append(param.clone().detach())
+            else:
+                clone[i].append(param)
+        clone[i] = tuple(clone[i])
+    return tuple(clone)
