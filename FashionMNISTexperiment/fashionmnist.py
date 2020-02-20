@@ -54,7 +54,7 @@ if __name__ == '__main__':
     max_n_iter = 1000
     n_posterior_samples = 1600
     # optimization parameters
-    n_multistart = 1
+    n_multistart = 5
     learning_rate = 0.05
     momentum1 = 0.9
     momentum2 = 0.999
