@@ -101,6 +101,9 @@ def get_h_and_v_params(K,D,experimental_condition = 0, prior_std = 1, data = Non
 
 
 def clone_init(init):
+    """
+    Convenience function for cloning initializations, avoiding continued training on original init
+    """
     clone = [[],[]]
     for i,parameter_set in enumerate(init):
         for param in parameter_set:

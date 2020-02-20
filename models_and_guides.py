@@ -188,13 +188,17 @@ def zeroMeanFactor2(X, batch_size, prior_parameters):
             cov_factor_new_loc = pyro.param('cov_factor_new_loc_hyper_{}'.format(K), cov_factor_locinit[-1,:])
             cov_factor_new_scale = pyro.param('cov_factor_new_scale_hyper_{}'.format(K), cov_factor_scaleinit[-1,:], constraint=constraints.positive)
             cov_factor_new = pyro.sample('cov_factor_new', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
-            cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+            # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
+            if cov_factor_new.dim() == cov_factor.dim():
+                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
+            else:
+                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
         else:
             with pyro.plate('K', K):
                 cov_factor_loc = pyro.param('cov_factor_loc_hyper_{}'.format(K), cov_factor_locinit)
                 cov_factor_scale = pyro.param('cov_factor_scale_hyper_{}'.format(K), cov_factor_scaleinit, constraint=constraints.positive)
                 cov_factor = pyro.sample('cov_factor', dist.Normal(cov_factor_loc,cov_factor_scale))
-        cov_factor = cov_factor.transpose(0,1)
+        cov_factor = cov_factor.transpose(-2,-1)
     with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
         X = pyro.sample('obs', dist.LowRankMultivariateNormal(torch.zeros(D), cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
     return X
@@ -217,13 +221,17 @@ def zeroMeanFactorGuide(X, batch_size, variational_parameter_initialization):
             cov_factor_new_loc = pyro.param('cov_factor_new_loc_{}'.format(K), cov_factor_loc_init[-1,:])
             cov_factor_new_scale = pyro.param('cov_factor_new_scale_{}'.format(K), cov_factor_scale_init[-1,:], constraint=constraints.positive)
             cov_factor_new = pyro.sample('cov_factor_new', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
-            cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+            # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
+            if cov_factor_new.dim() == cov_factor.dim():
+                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
+            else:
+                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
         else:
             with pyro.plate('K', K):
                 cov_factor_loc = pyro.param('cov_factor_loc_{}'.format(K), cov_factor_loc_init)
                 cov_factor_scale = pyro.param('cov_factor_scale_{}'.format(K), cov_factor_scale_init, constraint=constraints.positive)
                 cov_factor = pyro.sample('cov_factor', dist.Normal(cov_factor_loc,cov_factor_scale))
-        cov_factor = cov_factor.transpose(0,1)
+        cov_factor = cov_factor.transpose(-2,-1)
     return cov_factor, cov_diag
 
 def factorLocalLatents(X, batch_size, prior_parameters):
