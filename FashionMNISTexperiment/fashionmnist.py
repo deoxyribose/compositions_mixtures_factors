@@ -101,13 +101,13 @@ if __name__ == '__main__':
                 restarts, results = pickle.load(open(Kminmodel, 'rb'))
                 param_history = get_best_param_history_of_best_restart(results)
                 continue
-            elif experimental_condition > 0:
+            elif experimental_condition > 0 and K > Kmin:
                 prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
                 restarts, results = pickle.load(open(prevmodel, 'rb'))
                 param_history = get_best_param_history_of_best_restart(results)
             elif experimental_condition == 0:
                 param_history = None
-                
+
             if os.path.exists(filename):
                 print('{} exists, loading and continuing'.format(filename))
                 continue
