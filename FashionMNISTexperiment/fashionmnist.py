@@ -153,4 +153,7 @@ if __name__ == '__main__':
                 filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
                 with open(filename, 'wb') as f:
                     pickle.dump(inference_results, f)
-            os.remove('{}.p'.format(K))
+            try:
+                os.remove('{}.p'.format(K))
+            except FileNotFoundError:
+                continue
