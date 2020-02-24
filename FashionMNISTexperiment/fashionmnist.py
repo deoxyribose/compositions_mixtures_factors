@@ -79,7 +79,7 @@ if __name__ == '__main__':
         # if e.g. 1.p, 2.p and 3.p all exist, it will run the K=4 model and create 4.p
         for K in range(Kmin, Kmax+1):
             pyro.set_rng_seed(args.initseed)
-            # detect K.p file
+            # detect K.p file, if it exists continue to K+1
             if os.path.exists('{}.p'.format(K)) and experimental_condition == 0:
                 continue
             # if K.p doesn't exist, create it
@@ -102,13 +102,13 @@ if __name__ == '__main__':
             elif experimental_condition == 0:
                 param_history = None
             if os.path.exists(filename):
-                print('{} exists, loading and continueing'.format(filename))
+                print('{} exists, loading and continuing'.format(filename))
                 continue
             for restart in range(n_multistart):
                 # if some but not all restarts are completed
                 # load the finished restarts, and train the next one
                 if os.path.exists(filename):
-                    print('{} completed, loading and continueing'.format(restart+1))
+                    print('{} completed, loading and continuing'.format(restart+1))
                     with open(filename, 'rb') as f:
                         finished_restart,inference_results = pickle.load(f)
                     if finished_restart >= restart:
