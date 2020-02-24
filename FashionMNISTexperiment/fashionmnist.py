@@ -96,12 +96,12 @@ if __name__ == '__main__':
                 pickle.dump(([None]), f)
             # if pickle file exists, likewise continue
             filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
-            if experimental_condition > 0 and K == Kmin:
+            if experimental_condition == 0 and K == Kmin:
                 Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
                 restarts, results = pickle.load(open(Kminmodel, 'rb'))
                 param_history = get_best_param_history_of_best_restart(results)
                 continue
-            elif experimental_condition > 0 and K > Kmin:
+            elif experimental_condition == 0 and K > Kmin+1:
                 prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
                 restarts, results = pickle.load(open(prevmodel, 'rb'))
                 param_history = get_best_param_history_of_best_restart(results)
