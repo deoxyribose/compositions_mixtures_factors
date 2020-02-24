@@ -80,13 +80,11 @@ if __name__ == '__main__':
     data = x_train
     test_data = x_valid
 
-    init = get_h_and_v_params(K,D,0,1,data)
-
-
     for experimental_condition in range(n_experimental_conditions):
         # fashionmnist.py detects pickle files in the folder it's run in
         # if e.g. 1.p, 2.p and 3.p all exist, it will run the K=4 model and create 4.p
         for K in range(Kmin, Kmax+1):
+            print(K)
             pyro.set_rng_seed(args.initseed)
             # detect K.p file, if it exists continue to K+1
             if os.path.exists('{}.p'.format(K)) and experimental_condition == 0:
