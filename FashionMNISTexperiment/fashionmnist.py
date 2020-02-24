@@ -135,7 +135,7 @@ if __name__ == '__main__':
                 init = get_h_and_v_params(K, D, experimental_condition, 1, data, param_history)
                 # run 300 iterations
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                inference_results.append(inference_result)
+                #inference_results.append(inference_result)
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
                 with open(restart_filename, 'wb') as f:
