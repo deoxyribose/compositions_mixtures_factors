@@ -87,13 +87,20 @@ if __name__ == '__main__':
             print(K)
             pyro.set_rng_seed(args.initseed)
             # detect K.p file, if it exists continue to K+1
+            # that way the different servers can work in parallel
+            # but only conndition 0 is parallelizable
             if os.path.exists('{}.p'.format(K)) and experimental_condition == 0:
                 continue
-            # if K.p doesn't exist, create it
+            # if K.p doesn't exist, create it, so other servers don't start on it
             with open('{}.p'.format(K), 'wb') as f:
                 pickle.dump(([None]), f)
             # if pickle file exists, likewise continue
-            filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
+            #if os.path.exists(filename):
+            #    print('{} exists, loading and continuing'.format(filename))
+            #    continue
+
+
+            # load the previous model
             if experimental_condition == 1 and K == Kmin:
                 Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
                 restarts, results = pickle.load(open(Kminmodel, 'rb'))
@@ -106,27 +113,44 @@ if __name__ == '__main__':
             elif experimental_condition == 0:
                 param_history = None
 
-            if os.path.exists(filename):
-                print('{} exists, loading and continuing'.format(filename))
-                continue
+
             for restart in range(n_multistart):
                 # if some but not all restarts are completed
                 # load the finished restarts, and train the next one
-                if os.path.exists(filename):
-                    print('{} completed, loading and continuing'.format(restart+1))
-                    with open(filename, 'rb') as f:
-                        finished_restart,inference_results = pickle.load(f)
-                    if finished_restart >= restart:
-                        continue
-                else:
-                    inference_results = []
+                if os.path.exists('{}_{}.p'.format(K, restart)):
+                    print('Restart {} for K {} begun, continuing to next restart'.format(restart, K))
+                    continue
+                #    with open(filename, 'rb') as f:
+                #        finished_restart,inference_results = pickle.load(f)
+                #    if finished_restart >= restart:
+                #        print('{} completed, loading and continuing'.format(restart+1))
+                #        continue
+                #else:
+                #    inference_results = []
                 print('Multistart {}/{}'.format(restart+1,n_multistart))
-                pyro.clear_param_store()
+                # mark that a server has begun this restart
+                with open('{}_{}.p'.format(K,restart), 'wb') as f:
+                    pickle.dump(([None]), f)
                 # initialize
                 init = get_h_and_v_params(K, D, experimental_condition, 1, data, param_history)
                 # run 300 iterations
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                 inference_results.append(inference_result)
-                with open(filename, 'wb') as f:
+                # save the restart
+                restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
+                with open(restart_filename, 'wb') as f:
                     pickle.dump((restart,inference_results), f)
+            # load all restart pickles
+            if os.path.exists('{}_{}.p'.format(K, n_multistart)):
+                inference_results = []
+                # aggregate results
+                for restart in range(n_multistart):
+                    restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
+                    with open(restart_filename, 'rb') as f:
+                        restarts, results = pickle.load(f)
+                    inference_results.append(results)
+                # save as one pickle
+                filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
+                with open(filename, 'wb') as f:
+                    pickle.dump(inference_results, f)
             os.remove('{}.p'.format(K))
