@@ -25,6 +25,15 @@ from inference import *
 from models_and_guides import *
 from large_joint_optim import *
 
+def get_best_param_history_of_best_restart(results):
+    best_lppd_at_convergence = np.inf
+    for result in results:
+        _,_,lppds,param_history,_,_ = result
+        mean_lppd_at_convergence = sum(lppds[-10:])/10
+        if mean_lppd_at_convergence < best_lppd_at_convergence:
+            best_lppd_at_convergence = mean_lppd_at_convergence
+            best_param_history = param_history
+    return best_param_history
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
@@ -90,17 +99,15 @@ if __name__ == '__main__':
             if experimental_condition > 0 and K == Kmin:
                 Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
                 restarts, results = pickle.load(open(Kminmodel, 'rb'))
-                best_lppd_at_convergence = np.inf
-                for result in results:
-                    _,_,lppds,param_history,_,_ = result
-                    mean_lppd_at_convergence = sum(lppds[-10:])/10
-                    if mean_lppd_at_convergence < best_lppd_at_convergence:
-                        best_lppd_at_convergence = mean_lppd_at_convergence
-                        best_param_history = param_history
-                param_history = best_param_history
+                param_history = get_best_param_history_of_best_restart(results)
                 continue
+            elif experimental_condition > 0:
+                prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
+                restarts, results = pickle.load(open(prevmodel, 'rb'))
+                param_history = get_best_param_history_of_best_restart(results)
             elif experimental_condition == 0:
                 param_history = None
+                
             if os.path.exists(filename):
                 print('{} exists, loading and continuing'.format(filename))
                 continue
