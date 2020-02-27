@@ -146,6 +146,7 @@ if __name__ == '__main__':
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
                 with open(restart_filename, 'wb') as f:
+                    print("Saving restart {} to restart file".format(restart))
                     pickle.dump((restart,inference_results), f)
             # load all restart pickles
             if os.path.exists('{}_{}.p'.format(K, n_multistart)):
@@ -158,6 +159,7 @@ if __name__ == '__main__':
                     inference_results.append(results)
                 # save as one pickle
                 filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
+                print("Aggregating results in {}".format(filename))
                 with open(filename, 'wb') as f:
                     pickle.dump(inference_results, f)
             try:
