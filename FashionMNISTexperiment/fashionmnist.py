@@ -43,9 +43,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('initseed', type=int, help='Random seed to set for each K')
     parser.add_argument('K_range', type=int, nargs=2, help='', default=[1,2])
+    parser.add_argument('smoke_test', type=bool, default=False)
     args = parser.parse_args()
 
     Kmin, Kmax = args.K_range
+
+    smoke_test = args.smoke_test
 
     assert Kmin < Kmax
 
@@ -63,20 +66,29 @@ if __name__ == '__main__':
     y_valid = targets[50000:60000]
 
     n_experimental_conditions = 2
-    experimental_condition = 0
-    max_n_iter = 1000
-    n_posterior_samples = 1600
-    # optimization parameters
-    n_multistart = 5
     learning_rate = 0.05
     momentum1 = 0.9
     momentum2 = 0.999
     decay = 1.
     batch_size = 10
     n_mc_samples = 16
-    window = 10 # compute lppd every window iterations
-    convergence_window = 10 # estimate slope of convergence_window lppds
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
+
+    if smoke_test:
+        max_n_iter = 30
+        n_posterior_samples = 20
+        n_multistart = 2
+        window = 10 # compute lppd every window iterations
+        convergence_window = 5 # estimate slope of convergence_window lppds
+        Kmin = 1
+        Kmax = 2
+    else:
+        max_n_iter = 1000
+        n_posterior_samples = 1600
+        # optimization parameters
+        n_multistart = 5
+        window = 10 # compute lppd every window iterations
+        convergence_window = 10 # estimate slope of convergence_window lppds
 
     initseed = 42
     K = 1
@@ -121,7 +133,7 @@ if __name__ == '__main__':
                 param_history = None
 
 
-            for restart in range(n_multistart):
+            for restart in range(1,n_multistart+1):
                 # if some but not all restarts are completed
                 # load the finished restarts, and train the next one
                 if os.path.exists('{}_{}.p'.format(K, restart)):
@@ -147,12 +159,12 @@ if __name__ == '__main__':
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
                 with open(restart_filename, 'wb') as f:
                     print("Saving restart {} to restart file".format(restart))
-                    pickle.dump((restart,inference_results), f)
+                    pickle.dump((restart,inference_result), f)
             # load all restart pickles
             if os.path.exists('{}_{}.p'.format(K, n_multistart)):
                 inference_results = []
                 # aggregate results
-                for restart in range(n_multistart):
+                for restart in range(1,n_multistart+1):
                     restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
                     with open(restart_filename, 'rb') as f:
                         restarts, results = pickle.load(f)
