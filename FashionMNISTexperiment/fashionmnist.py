@@ -18,6 +18,7 @@ from pyro import distributions as dst
 from collections import defaultdict
 import sys
 import argparse
+import time
 sys.path.append("..")
 sys.path.append("../factor/")
 from tracepredictive import *
@@ -25,7 +26,9 @@ from inference import *
 from models_and_guides import *
 from large_joint_optim import *
 
-def get_best_param_history_of_best_restart(results):
+def get_best_param_history_of_best_restart(model):
+    with open(model, 'rb') as f:
+        restarts, results = pickle.load(f)
     best_lppd_at_convergence = np.inf
     for result in results:
         _,_,lppds,param_history,_,_ = result
@@ -99,17 +102,20 @@ if __name__ == '__main__':
             #    print('{} exists, loading and continuing'.format(filename))
             #    continue
 
-
             # load the previous model
-            if experimental_condition == 1 and K == Kmin:
-                Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
-                restarts, results = pickle.load(open(Kminmodel, 'rb'))
-                param_history = get_best_param_history_of_best_restart(results)
-                continue
-            elif experimental_condition == 1 and K > Kmin+1:
-                prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
-                restarts, results = pickle.load(open(prevmodel, 'rb'))
-                param_history = get_best_param_history_of_best_restart(results)
+            if experimental_condition == 1:
+                if K == Kmin:
+                    Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
+                    param_history = get_best_param_history_of_best_restart(Kminmodel)
+                    continue
+            elif experimental_condition == 1:
+                if K > Kmin+1:
+                    prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
+                    try:
+                        param_history = get_best_param_history_of_best_restart(prevmodel)
+                    except FileNotFoundError:
+                        print("File doesn't exist yet, sleeping for 10 seconds and trying again.")
+                        time.sleep(10)
             elif experimental_condition == 0:
                 param_history = None
 
@@ -133,7 +139,7 @@ if __name__ == '__main__':
                     pickle.dump(([None]), f)
                 # initialize
                 init = get_h_and_v_params(K, D, experimental_condition, 1, data, param_history)
-                # run 300 iterations
+                # 
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                 #inference_results.append(inference_result)
                 # save the restart
