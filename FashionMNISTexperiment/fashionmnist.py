@@ -39,6 +39,12 @@ def get_best_param_history_of_best_restart(model):
             best_param_history = param_history
     return best_param_history
 
+def sleep_until_file_exists(file):
+    seconds_passed = 0
+    while not os.exists(file) or seconds_passed > 3600*2:
+        time.sleep(1)
+        seconds_passed += 1
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('initseed', type=int, help='Random seed to set for each K')
@@ -119,16 +125,14 @@ if __name__ == '__main__':
             if experimental_condition == 1:
                 if K == Kmin:
                     Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
+                    sleep_until_file_exists(Kminmodel)
                     param_history = get_best_param_history_of_best_restart(Kminmodel)
                     continue
             elif experimental_condition == 1:
                 if K > Kmin+1:
                     prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
-                    try:
-                        param_history = get_best_param_history_of_best_restart(prevmodel)
-                    except FileNotFoundError:
-                        print("File doesn't exist yet, sleeping for 10 seconds and trying again.")
-                        time.sleep(10)
+                    sleep_until_file_exists(prevmodel)
+                    param_history = get_best_param_history_of_best_restart(prevmodel)
             elif experimental_condition == 0:
                 param_history = None
 
