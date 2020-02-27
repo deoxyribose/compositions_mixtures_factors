@@ -27,6 +27,7 @@ from models_and_guides import *
 from large_joint_optim import *
 
 def get_best_param_history_of_best_restart(model):
+    print("Loading best restart from {}".format(model))
     with open(model, 'rb') as f:
         restarts, results = pickle.load(f)
     best_lppd_at_convergence = np.inf
