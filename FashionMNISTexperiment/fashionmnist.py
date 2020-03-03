@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('initseed', type=int, help='Random seed to set for each K')
     parser.add_argument('K_range', type=int, nargs=2, help='', default=[1,2])
-    parser.add_argument('smoke_test', type=bool, default=False)
+    parser.add_argument('smoke_test', type=bool, nargs='?', const = True, default=False)
     args = parser.parse_args()
 
     Kmin, Kmax = args.K_range
