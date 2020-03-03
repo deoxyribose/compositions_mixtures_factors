@@ -119,41 +119,30 @@ if __name__ == '__main__':
                     sleep_until_file_exists(prevmodel)
                     param_history = get_param_history_of_best_restart(prevmodel)
                     print(prevmodel)
-                #else:
-                # K is 2 and best param_history from K=1, condition 0 has just been loaded
-                #print("Something went wrong, K is {}".format(K))
             elif condition == 0:
                 param_history = None
 
+            # identify an uninitiated K
             for restart in range(1,n_multistart+1):
-                # if some but not all restarts are completed
-                # load the finished restarts, and train the next one
                 if os.path.exists('Condition{}_K{}_Restart{}.p'.format(condition, K, restart)):
                     print('Restart {} for K {} in condition {} begun, continuing to next restart'.format(restart, K, condition))
                     continue
-                #    with open(filename, 'rb') as f:
-                #        finished_restart,inference_results = pickle.load(f)
-                #    if finished_restart >= restart:
-                #        print('{} completed, loading and continuing'.format(restart+1))
-                #        continue
-                #else:
-                #    inference_results = []
+
                 print('Multistart {}/{}'.format(restart,n_multistart))
                 # mark that a server has begun this restart
                 with open('Condition{}_K{}_Restart{}.p'.format(condition, K, restart), 'wb') as f:
                     pickle.dump(([None]), f)
                 # initialize
                 init = get_h_and_v_params(K, D, condition, 1, data, param_history)
-                # 
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                #inference_results.append(inference_result)
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
                 with open(restart_filename, 'wb') as f:
                     print("Saving restart {} to restart file".format(restart))
                     pickle.dump((restart,inference_result), f)
-            # load all restart pickles
-            if os.path.exists('Condition{}_K{}_Restart{}.p'.format(condition, K, n_multistart)):
+
+            # aggregate restarts
+            if all([os.path.exists("{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)) for restart in range(1,n_multistart+1)]):
                 inference_results = []
                 # aggregate results
                 for restart in range(1,n_multistart+1):
