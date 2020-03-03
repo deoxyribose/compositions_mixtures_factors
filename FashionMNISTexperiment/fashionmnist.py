@@ -81,6 +81,7 @@ if __name__ == '__main__':
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
     if smoke_test:
+        print("Running smoke test")
         max_n_iter = 30
         n_posterior_samples = 200
         n_multistart = 2
