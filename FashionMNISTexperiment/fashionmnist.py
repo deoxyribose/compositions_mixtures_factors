@@ -26,10 +26,10 @@ from inference import *
 from models_and_guides import *
 from large_joint_optim import *
 
-def get_best_param_history_of_best_restart(model):
+def get_param_history_of_best_restart(model):
     print("Loading best restart from {}".format(model))
     with open(model, 'rb') as f:
-        restarts, results = pickle.load(f)
+        results = pickle.load(f)
     best_lppd_at_convergence = np.inf
     for result in results:
         _,_,lppds,param_history,_,_ = result
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     x_valid = tr[50000:60000]
     y_valid = targets[50000:60000]
 
-    n_experimental_conditions = 2
+    n_conditions = 2
     learning_rate = 0.05
     momentum1 = 0.9
     momentum2 = 0.999
@@ -82,12 +82,12 @@ if __name__ == '__main__':
 
     if smoke_test:
         max_n_iter = 30
-        n_posterior_samples = 20
+        n_posterior_samples = 200
         n_multistart = 2
         window = 10 # compute lppd every window iterations
         convergence_window = 5 # estimate slope of convergence_window lppds
         Kmin = 1
-        Kmax = 2
+        Kmax = 3
     else:
         max_n_iter = 1000
         n_posterior_samples = 1600
@@ -102,46 +102,34 @@ if __name__ == '__main__':
     data = x_train
     test_data = x_valid
 
-    for experimental_condition in range(n_experimental_conditions):
-        # fashionmnist.py detects pickle files in the folder it's run in
-        # if e.g. 1.p, 2.p and 3.p all exist, it will run the K=4 model and create 4.p
+    for condition in range(n_conditions):
+        print("Condition {}".format(condition))
         for K in range(Kmin, Kmax+1):
-            print(K)
             pyro.set_rng_seed(args.initseed)
-            # detect K.p file, if it exists continue to K+1
-            # that way the different servers can work in parallel
-            # but only conndition 0 is parallelizable
-            if os.path.exists('{}.p'.format(K)) and experimental_condition == 0:
-                continue
-            # if K.p doesn't exist, create it, so other servers don't start on it
-            with open('{}.p'.format(K), 'wb') as f:
-                pickle.dump(([None]), f)
-            # if pickle file exists, likewise continue
-            #if os.path.exists(filename):
-            #    print('{} exists, loading and continuing'.format(filename))
-            #    continue
 
             # load the previous model
-            if experimental_condition == 1:
+            if condition == 1:
                 if K == Kmin:
                     Kminmodel = "{}_factors_{}_fashionMNIST.p".format(Kmin,0)
                     sleep_until_file_exists(Kminmodel)
-                    param_history = get_best_param_history_of_best_restart(Kminmodel)
+                    param_history = get_param_history_of_best_restart(Kminmodel)
                     continue
-            elif experimental_condition == 1:
-                if K > Kmin+1:
+                elif K > Kmin+1:
                     prevmodel = "{}_factors_{}_fashionMNIST.p".format(K-1,1)
                     sleep_until_file_exists(prevmodel)
-                    param_history = get_best_param_history_of_best_restart(prevmodel)
-            elif experimental_condition == 0:
+                    param_history = get_param_history_of_best_restart(prevmodel)
+                    print(prevmodel)
+                #else:
+                # K is 2 and best param_history from K=1, condition 0 has just been loaded
+                #print("Something went wrong, K is {}".format(K))
+            elif condition == 0:
                 param_history = None
-
 
             for restart in range(1,n_multistart+1):
                 # if some but not all restarts are completed
                 # load the finished restarts, and train the next one
-                if os.path.exists('{}_{}.p'.format(K, restart)):
-                    print('Restart {} for K {} begun, continuing to next restart'.format(restart, K))
+                if os.path.exists('Condition{}_K{}_Restart{}.p'.format(condition, K, restart)):
+                    print('Restart {} for K {} in condition {} begun, continuing to next restart'.format(restart, K, condition))
                     continue
                 #    with open(filename, 'rb') as f:
                 #        finished_restart,inference_results = pickle.load(f)
@@ -150,35 +138,41 @@ if __name__ == '__main__':
                 #        continue
                 #else:
                 #    inference_results = []
-                print('Multistart {}/{}'.format(restart+1,n_multistart))
+                print('Multistart {}/{}'.format(restart,n_multistart))
                 # mark that a server has begun this restart
-                with open('{}_{}.p'.format(K,restart), 'wb') as f:
+                with open('Condition{}_K{}_Restart{}.p'.format(condition, K, restart), 'wb') as f:
                     pickle.dump(([None]), f)
                 # initialize
-                init = get_h_and_v_params(K, D, experimental_condition, 1, data, param_history)
+                init = get_h_and_v_params(K, D, condition, 1, data, param_history)
                 # 
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                 #inference_results.append(inference_result)
                 # save the restart
-                restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
+                restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
                 with open(restart_filename, 'wb') as f:
                     print("Saving restart {} to restart file".format(restart))
                     pickle.dump((restart,inference_result), f)
             # load all restart pickles
-            if os.path.exists('{}_{}.p'.format(K, n_multistart)):
+            if os.path.exists('Condition{}_K{}_Restart{}.p'.format(condition, K, n_multistart)):
                 inference_results = []
                 # aggregate results
                 for restart in range(1,n_multistart+1):
-                    restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,str(experimental_condition))
+                    restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
                     with open(restart_filename, 'rb') as f:
                         restarts, results = pickle.load(f)
                     inference_results.append(results)
                 # save as one pickle
-                filename = "{}_factors_{}_fashionMNIST.p".format(K,str(experimental_condition))
-                print("Aggregating results in {}".format(filename))
+                filename = "{}_factors_{}_fashionMNIST.p".format(K,condition)
+                print("Aggregating restarts in {}".format(filename))
                 with open(filename, 'wb') as f:
                     pickle.dump(inference_results, f)
-            try:
-                os.remove('{}.p'.format(K))
-            except FileNotFoundError:
-                continue
+    # clean-up
+    for condition in range(n_conditions):
+        for restart in range(1,n_multistart+1):
+            for K in range(Kmin, Kmax+1):
+                scheduling_filename = 'Condition{}_K{}_Restart{}.p'.format(condition, K, restart)
+                restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
+                filenames = [scheduling_filename, restart_filename]
+                for filename in filenames:
+                    if os.path.exists(filename):
+                        os.remove(filename)

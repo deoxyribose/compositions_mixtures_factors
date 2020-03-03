@@ -63,9 +63,11 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     loss = svi.step(training_data, batch_size, init)
     param_history = dict({k:v.unsqueeze(0) for k,v in pyro.get_param_store().items()})
     # register gradient hooks for monitoring
-    for name, value in pyro.get_param_store().named_parameters():
-        value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
+    #for name, value in pyro.get_param_store().named_parameters():
+    #    value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
 
+    # print current job
+    print("Training {} with {}".format(model.__repr__(), init[0][0]))
     # optimize
     i = 0
     raw_batch_size = batch_size
