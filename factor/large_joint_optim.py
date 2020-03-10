@@ -35,10 +35,10 @@ if __name__ == '__main__':
     # define parameters shared between conditions
 
     n_experimental_conditions = 2
-    max_n_iter = 800
+    max_n_iter = 1500
     dgp_prior_std = 1
     proportion_of_data_for_testing = 0.2
-    n_posterior_samples = 1600
+    n_posterior_samples = 10000
 
     # optimization parameters
     n_multistart = 6
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     decay = 1.
     batch_size = 10
     n_mc_samples = 10
-    window = 10 # compute lppd every window iterations
+    window = 3 # compute lppd every window iterations
     convergence_window = 10 # estimate slope of convergence_window lppds
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 

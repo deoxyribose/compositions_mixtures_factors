@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 import pyro
 import pyro.optim
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO
+from pyro.infer.predictive import _predictive
 from torch.distributions import constraints
 from pyro import distributions as dst
 from collections import defaultdict
@@ -24,22 +25,20 @@ def p_value_of_slope(loss, window, slope_significance):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def compute_lppd(model, guide, data, hyperparameters, n_samples = 5000):
+def get_lppd(model, guide, data, init, n_samples = 10000):
+    # sample N latent variables from guide
+    posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
+    # posterior_samples['scale'] is by default a (n_samples,1,D), needs to be (n_samples,D) or we get a Cartesian product
+    posterior_samples['scale'] = torch.squeeze(posterior_samples['scale'])
+    # condition N models on latent variables
     unconditioned_model = pyro.poutine.uncondition(model)
-    dummy_obs = data[0:1,:]
-    n_blocks = 8
-    predictive_probs = torch.zeros((n_blocks, data.shape[0]))
-    block_length = n_samples//n_blocks
-    log_probs = torch.zeros((block_length, data.shape[0]))
-    for block in range(8):
-        for model_idx in range(block_length):
-            guide_trace = pyro.poutine.trace(guide).get_trace(dummy_obs, 1, hyperparameters)
-            blockreplay = pyro.poutine.block(fn = pyro.poutine.replay(unconditioned_model, guide_trace),expose=['loc','obs'])
-            posterior_predictive = pyro.poutine.trace(blockreplay).get_trace(dummy_obs, 1, hyperparameters)
-            log_probs[model_idx] = posterior_predictive.nodes['obs']['fn'].log_prob(data)
-        probs = torch.logsumexp(log_probs,dim=0)-np.log(np.float(block_length))
-        predictive_probs[block] = probs
-    return (torch.logsumexp(predictive_probs,dim=0)-np.log(np.float(n_blocks))).mean()
+    pred = pyro.poutine.condition(unconditioned_model, posterior_samples)
+    pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,2)), n_samples, init)
+    # get log_prob of each of the N conditioned models on test data
+    log_probs = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(test_data, dim=-2))
+    # logsumexp over the N models minus log(N) (= divide the probability sum by N)
+    # mean over test data
+    return (log_probs.logsumexp(dim=1)-np.log(n_samples)).mean()
 
 def inference(model, guide, training_data, test_data, init, n_iter = 10000, window = 500, batch_size = 10, n_mc_samples = 16, learning_rate = 0.1, learning_rate_decay = 0.9999, n_posterior_samples = 800, slope_significance = 0.5, track_params = False):
     pyro.clear_param_store()
@@ -74,7 +73,7 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     n_posterior_samples = n_posterior_samples//10
     lppds = []
     with torch.no_grad():
-        lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+        lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
         lppds.append(-lppd)
         print(lppds[-1])
 
@@ -91,8 +90,8 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
                 #print('\n', end='')
                 #raw_batch_size *= 1.05n_posterior_samplesn_posterior_samples
 
-                n_posterior_samples += 8*4
-                n_posterior_samples = min(n_posterior_samples, 1600)
+                n_posterior_samples += 1000
+                n_posterior_samples = min(n_posterior_samples, 10000)
 
                 raw_batch_size += 2
                 batch_size = min(16,int(raw_batch_size))
@@ -101,7 +100,7 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
                 svi.num_samples = min(n_mc_samples,svi.num_samples)
 
                 with torch.no_grad():
-                    lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+                    lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
                     lppds.append(-lppd)
                     print('\n')
                     print(lppds[-1])
