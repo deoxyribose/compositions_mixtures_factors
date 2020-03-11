@@ -25,7 +25,7 @@ def p_value_of_slope(loss, window, slope_significance):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def get_lppd(model, guide, data, init, n_samples = 10000):
+def get_lppd(model, guide, data, init, n_samples = 1000):
     # sample N latent variables from guide
     posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
     # posterior_samples['scale'] is by default a (n_samples,1,D), needs to be (n_samples,D) or we get a Cartesian product
@@ -33,9 +33,14 @@ def get_lppd(model, guide, data, init, n_samples = 10000):
     # condition N models on latent variables
     unconditioned_model = pyro.poutine.uncondition(model)
     pred = pyro.poutine.condition(unconditioned_model, posterior_samples)
-    pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,2)), n_samples, init)
+    pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     # get log_prob of each of the N conditioned models on test data
-    log_probs = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(test_data, dim=-2))
+    log_probs = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(data, dim=-2))
+    #print(log_probs.dtype)
+    #print(log_probs.shape)
+    #print(log_probs.element_size(),log_probs.nelement())
+    #print(log_probs.element_size() * log_probs.nelement()/1e6)
+
     # logsumexp over the N models minus log(N) (= divide the probability sum by N)
     # mean over test data
     return (log_probs.logsumexp(dim=1)-np.log(n_samples)).mean()
@@ -70,7 +75,6 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     # optimize
     i = 0
     raw_batch_size = batch_size
-    n_posterior_samples = n_posterior_samples//10
     lppds = []
     with torch.no_grad():
         lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
@@ -89,9 +93,6 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
                 #print('\nSetting lr to {} after {} iterations'.format(lr, i), end='')
                 #print('\n', end='')
                 #raw_batch_size *= 1.05n_posterior_samplesn_posterior_samples
-
-                n_posterior_samples += 1000
-                n_posterior_samples = min(n_posterior_samples, 10000)
 
                 raw_batch_size += 2
                 batch_size = min(16,int(raw_batch_size))

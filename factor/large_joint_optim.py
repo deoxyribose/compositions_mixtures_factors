@@ -37,8 +37,8 @@ if __name__ == '__main__':
     n_experimental_conditions = 2
     max_n_iter = 1500
     dgp_prior_std = 1
-    proportion_of_data_for_testing = 0.2
-    n_posterior_samples = 10000
+    proportion_of_data_for_testing = 0.1
+    n_posterior_samples = 1000
 
     # optimization parameters
     n_multistart = 6
@@ -64,7 +64,7 @@ if __name__ == '__main__':
             all_data = true_variables['obs']
             test_idxs = np.random.choice(totalN,size=int(totalN*proportion_of_data_for_testing),replace=False)
             mask = np.ones(all_data.shape[0],dtype=bool)
-            mask[test_idxs] = False
+            mask[test_idxs] = False 
             data = all_data[mask]
             test_data = all_data[~mask]
             N = data.shape[0]
