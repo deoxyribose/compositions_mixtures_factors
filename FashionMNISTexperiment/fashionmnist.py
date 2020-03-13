@@ -135,8 +135,8 @@ if __name__ == '__main__':
                     pickle.dump(([None]), f)
                 # initialize
                 init = get_h_and_v_params(K, D, condition, 1, data, param_history)
-                if smoke_test:
-                    print('Init is {}'.format(init[0][1]    ))
+                #if smoke_test:
+                    #print('Init is {}'.format(init[0][1]    ))
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)

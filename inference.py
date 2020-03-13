@@ -26,6 +26,8 @@ def p_value_of_slope(loss, window, slope_significance):
         return sps.linregress(np.arange(window),recent)[3]
 
 def get_lppd(model, guide, data, init, n_samples = 1000):
+    print(n_samples*data.shape[0])
+    assert n_samples*data.shape[0] < 1e8
     # sample N latent variables from guide
     posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
     # posterior_samples['scale'] is by default a (n_samples,1,D), needs to be (n_samples,D) or we get a Cartesian product
@@ -36,10 +38,10 @@ def get_lppd(model, guide, data, init, n_samples = 1000):
     pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     # get log_prob of each of the N conditioned models on test data
     log_probs = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(data, dim=-2))
-    #print(log_probs.dtype)
-    #print(log_probs.shape)
-    #print(log_probs.element_size(),log_probs.nelement())
-    #print(log_probs.element_size() * log_probs.nelement()/1e6)
+    print(log_probs.dtype)
+    print(log_probs.shape)
+    print(log_probs.element_size(),log_probs.nelement())
+    print(log_probs.element_size() * log_probs.nelement()/1e6)
 
     # logsumexp over the N models minus log(N) (= divide the probability sum by N)
     # mean over test data
@@ -57,8 +59,8 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     if 'Mixture' in model.__repr__():
         elbo = TraceEnum_ELBO(max_plate_nesting=3)
     else:
-        elbo = Trace_ELBO()
-    svi = SVI(model, guide, scheduler, loss=elbo, num_samples=10)
+        elbo = Trace_ELBO(num_particles=10, vectorize_particles=True)
+    svi = SVI(model, guide, scheduler, loss=elbo)
 
     # Register hooks to monitor gradient norms.
     losses = []
