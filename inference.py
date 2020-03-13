@@ -10,6 +10,7 @@ from os import listdir
 from os.path import isfile, join
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 import pyro
+import sys
 import pyro.optim
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO
 from pyro.infer.predictive import _predictive
@@ -17,6 +18,7 @@ from torch.distributions import constraints
 from pyro import distributions as dst
 from collections import defaultdict
 from functools import wraps
+import time
 
 def p_value_of_slope(loss, window, slope_significance):
     if len(loss) < window or any(map(torch.isinf, loss)) or slope_significance == 1:
@@ -25,8 +27,10 @@ def p_value_of_slope(loss, window, slope_significance):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def get_lppd(model, guide, data, init, n_samples = 1000):
-    print(n_samples*data.shape[0])
+def get_lppd(model, guide, data, init, n_samples = 1000, verbose = False):
+    if verbose:
+        print("Number of posterior samples is {}".format(n_samples))
+        print("Number of test data points to evaluate the models on is {}".format(data.shape[0]))
     assert n_samples*data.shape[0] < 1e8
     # sample N latent variables from guide
     posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
@@ -37,11 +41,18 @@ def get_lppd(model, guide, data, init, n_samples = 1000):
     pred = pyro.poutine.condition(unconditioned_model, posterior_samples)
     pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     # get log_prob of each of the N conditioned models on test data
-    log_probs = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(data, dim=-2))
-    print(log_probs.dtype)
-    print(log_probs.shape)
-    print(log_probs.element_size(),log_probs.nelement())
-    print(log_probs.element_size() * log_probs.nelement()/1e6)
+    log_probs = torch.empty((data.shape[0],n_samples))
+    # matrices downstream get too big for memory if there's a lot of data points, so split it up into smaller ones
+    n_partitions = 100
+    for i in range(n_partitions):
+        idx0 = i*data.shape[0]//n_partitions
+        idx1 = (i+1)*data.shape[0]//n_partitions
+        log_probs[idx0:idx1,:] = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(data[idx0:idx1,:], dim=-2))
+    if verbose:
+        print(log_probs.dtype)
+        print(log_probs.shape)
+        print(log_probs.element_size(),log_probs.nelement())
+        print(log_probs.element_size() * log_probs.nelement()/1e6)
 
     # logsumexp over the N models minus log(N) (= divide the probability sum by N)
     # mean over test data
@@ -76,7 +87,6 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     print("Training {} with {}".format(model.__repr__(), init[0][0]))
     # optimize
     i = 0
-    raw_batch_size = batch_size
     lppds = []
     with torch.no_grad():
         lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
@@ -89,27 +99,16 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
             if i % window or i <= window:
                 print('.', end='')
                 scheduler.step()
-                #state = scheduler.get_state()['loc_loc']
-                #lr = state['base_lrs'][0]*state['gamma']**state['last_epoch']
             else:
-                #print('\nSetting lr to {} after {} iterations'.format(lr, i), end='')
-                #print('\n', end='')
-                #raw_batch_size *= 1.05n_posterior_samplesn_posterior_samples
-
-                raw_batch_size += 2
-                batch_size = min(16,int(raw_batch_size))
-
-                svi.num_samples += 1
-                svi.num_samples = min(n_mc_samples,svi.num_samples)
-
                 with torch.no_grad():
+                    start = time.time()
                     lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+                    print("Computing lppd took {}".format(time.time() - start))
                     lppds.append(-lppd)
                     print('\n')
                     print(lppds[-1])
                 print('\n')
                 print('{}/{}'.format(i,n_iter))
-                print('\nSetting number of MC samples to {}'.format(svi.num_samples), end='')
                 print('\nSetting number of posterior samples to {}'.format(n_posterior_samples), end='')
                 print('\nSetting batch size to {}'.format(batch_size), end='')
             losses.append(loss)
