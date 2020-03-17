@@ -30,46 +30,36 @@ def p_value_of_slope(loss, window, slope_significance):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def get_lppd(model, guide, data, init, n_samples = 1000, verbose = False):
-    if verbose:
-        print("Number of posterior samples is {}".format(n_samples))
-        print("Number of test data points to evaluate the models on is {}".format(data.shape[0]))
-    assert n_samples*data.shape[0] < 1e8
+def get_lppd(model, guide, data, init, n_samples = 1000, verbose = True):
+    """
+    Parallel implementation, where samples from the posterior are batched. Doesn't work for big datasets due to low_rank_multivariate_normal's log_prob having to matmul large matrices
+    Slower than looping over posterior samples as in compute_lppd
+    """
     # sample N latent variables from guide
     posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
-    
     # posterior_samples['scale'] is by default a (n_samples,1,D), needs to be (n_samples,D) or we get a Cartesian product
     posterior_samples['scale'] = torch.squeeze(posterior_samples['scale'])
-
-    # squeeze any singleton dimensions in posterior_samples
-    #posterior_samples = {k:torch.squeeze(v) for (k,v) in posterior_samples.items()}
-    # condition N models on latent variables
     unconditioned_model = pyro.poutine.uncondition(model)
-
-    #max_plate_nesting = _guess_max_plate_nesting(unconditioned_model, (torch.empty((1,data.shape[1])), 1, init), {})
-    #vectorize = pyro.plate("_num_predictive_samples", n_samples, dim=-max_plate_nesting-1)
     pred = pyro.poutine.condition(unconditioned_model, posterior_samples)
-    #pred = pyro.poutine.condition(vectorize(unconditioned_model), posterior_samples)
-    #pred = pyro.poutine.block(pred, hide=["N"])
-    #pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
-    # get log_prob of each of the N conditioned models on test data
     log_probs = torch.empty((data.shape[0],n_samples))
-    # matrices downstream get too big for memory if there's a lot of data points, so split it up into smaller ones
-    n_partitions = 100
+    n_partitions = 50
     for i in range(n_partitions):
         idx0 = i*data.shape[0]//n_partitions
         idx1 = (i+1)*data.shape[0]//n_partitions
         log_probs[idx0:idx1,:] = pred_trace.nodes['obs']['fn'].log_prob(torch.unsqueeze(data[idx0:idx1,:], dim=-2))
-    if verbose:
-        print(log_probs.dtype)
-        print(log_probs.shape)
-        print(log_probs.element_size(),log_probs.nelement())
-        print(log_probs.element_size() * log_probs.nelement()/1e6)
-
-    # logsumexp over the N models minus log(N) (= divide the probability sum by N)
-    # mean over test data
     return (log_probs.logsumexp(dim=1)-np.log(n_samples)).mean()
+
+def compute_lppd(model, guide, data, init, n_samples = 1000):
+    unconditioned_model = pyro.poutine.uncondition(model)
+    dummy_obs = data[0:1,:]
+    log_probs = torch.zeros((data.shape[0],n_samples))
+    for model_idx in range(n_samples):
+        guide_trace = pyro.poutine.trace(guide).get_trace(dummy_obs, 1, init)
+        blockreplay = pyro.poutine.block(fn = pyro.poutine.replay(unconditioned_model, guide_trace),expose=['obs'])
+        posterior_predictive = pyro.poutine.trace(blockreplay).get_trace(dummy_obs, 1, init)
+        log_probs[:,model_idx] = posterior_predictive.nodes['obs']['fn'].log_prob(data)
+    return (torch.logsumexp(log_probs,dim=1)-np.log(np.float(n_samples))).mean()
 
 def inference(model, guide, training_data, test_data, init, n_iter = 10000, window = 500, batch_size = 10, n_mc_samples = 16, learning_rate = 0.1, learning_rate_decay = 0.9999, n_posterior_samples = 800, slope_significance = 0.5, track_params = False):
     pyro.clear_param_store()
@@ -103,7 +93,13 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     i = 0
     lppds = []
     with torch.no_grad():
-        lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+#        start = time.time()
+#        lppd = get_lppd2(model, guide, test_data, init, n_samples=n_posterior_samples)
+#        print("Computing lppd took {}".format(time.time() - start))
+
+        start = time.time()
+        lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+        print("Computing lppd took {}".format(time.time() - start))
         lppds.append(-lppd)
         print(lppds[-1])
 
@@ -116,7 +112,7 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
             else:
                 with torch.no_grad():
                     start = time.time()
-                    lppd = get_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
+                    lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
                     print("Computing lppd took {}".format(time.time() - start))
                     lppds.append(-lppd)
                     print('\n')

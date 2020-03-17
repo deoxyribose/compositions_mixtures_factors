@@ -95,7 +95,7 @@ if __name__ == '__main__':
         n_posterior_samples = 1000
         # optimization parameters
         n_multistart = 5
-        window = 3 # compute lppd every window iterations
+        window = 10 # compute lppd every window iterations
         convergence_window = 30 # estimate slope of convergence_window lppds
 
     initseed = 42
@@ -139,7 +139,7 @@ if __name__ == '__main__':
                 #if smoke_test:
                     #print('Init is {}'.format(init[0][1]    ))
                 inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                print(inference_result[4])
+                print(inference_result[4][1][:10])
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
                 with open(restart_filename, 'wb') as f:
