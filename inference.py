@@ -93,8 +93,8 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     #for name, value in pyro.get_param_store().named_parameters():
     #    value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
 
-    # print current jo
-b    print("Training {} with {}".format(model.__repr__(), init[0][0]))
+    # print current job
+    print("Training {} with {}".format(model.__repr__(), init[0][0]))
     # optimize
     i = 0
     lppds = []
