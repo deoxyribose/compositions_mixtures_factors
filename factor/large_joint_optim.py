@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     for totalN in [5000,10000]:
         for D in [50,500]:#[20,30]: #
-            print(totalN, D)
+            print("Running experiment with {} {}-dimensional observations".format(totalN, D))
             trueK = 7#D//3
             trueinit = get_h_and_v_params(trueK,D,experimental_condition = None, prior_std = 1)
             dgp = pyro.poutine.uncondition(zeroMeanFactor)
