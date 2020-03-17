@@ -102,18 +102,16 @@ if __name__ == '__main__':
                         pyro.clear_param_store()
                         # initialize
                         init = get_h_and_v_params(K, D, experimental_condition, prior_std, data, param_history)
-                        initcopy = clone_init(init)
-                        # run 300 iterations
                         inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                        _, _, lppds, _, _,_ = inference_results
+                        _, _, lppds, _, init,_ = inference_results
                         loss_after_init = sum(lppds[-3:])/3
                         inits.append(lppds)
-                        if loss_after_init < best_loss_after_init:
-                            best_loss_after_init = loss_after_init
-                            best_init = initcopy
-                    init = best_init
-                    inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                    svi, losses, lppds, param_history, init, gradient_norms = inference_results
+                    #    if loss_after_init < best_loss_after_init:
+                    #        best_loss_after_init = loss_after_init
+                    #        best_init = init
+                    #init = best_init
+                    #inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                    #svi, losses, lppds, param_history, init, gradient_norms = inference_results
                     end = time.time()
                     print('\nTraining took {} seconds'.format(round(end - start))) 
             ########################

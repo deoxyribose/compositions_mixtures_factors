@@ -19,6 +19,9 @@ from pyro import distributions as dst
 from collections import defaultdict
 from functools import wraps
 import time
+import sys
+sys.path.append("..")
+from initializations import *
 
 def p_value_of_slope(loss, window, slope_significance):
     if len(loss) < window or any(map(torch.isinf, loss)) or slope_significance == 1:
@@ -70,6 +73,7 @@ def get_lppd(model, guide, data, init, n_samples = 1000, verbose = False):
 
 def inference(model, guide, training_data, test_data, init, n_iter = 10000, window = 500, batch_size = 10, n_mc_samples = 16, learning_rate = 0.1, learning_rate_decay = 0.9999, n_posterior_samples = 800, slope_significance = 0.5, track_params = False):
     pyro.clear_param_store()
+    initcopy = clone_init(init)
 
     #def per_param_callable(module_name, param_name):
     #    return {"lr": learning_rate, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
@@ -136,4 +140,4 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     if not track_params:
         # save just last values, since that's all we need for incremental inference, and the rest fills too much space
         param_history = dict(zip(param_history.keys(), map(lambda x: x[-1], param_history.values())))
-    return svi, losses, lppds, param_history, init, gradient_norms
+    return svi, losses, lppds, param_history, initcopy, gradient_norms
