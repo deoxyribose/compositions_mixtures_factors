@@ -189,6 +189,8 @@ def zeroMeanFactor2(X, batch_size, prior_parameters):
             cov_factor_new_scale = pyro.param('cov_factor_new_scale_hyper_{}'.format(K), cov_factor_scaleinit[-1,:], constraint=constraints.positive)
             cov_factor_new = pyro.sample('cov_factor_new', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
             # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
+            #print(cov_factor.shape)
+            #print(cov_factor_new.shape)
             if cov_factor_new.dim() == cov_factor.dim():
                 cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
             else:
@@ -198,7 +200,9 @@ def zeroMeanFactor2(X, batch_size, prior_parameters):
                 cov_factor_loc = pyro.param('cov_factor_loc_hyper_{}'.format(K), cov_factor_locinit)
                 cov_factor_scale = pyro.param('cov_factor_scale_hyper_{}'.format(K), cov_factor_scaleinit, constraint=constraints.positive)
                 cov_factor = pyro.sample('cov_factor', dist.Normal(cov_factor_loc,cov_factor_scale))
+        #print(cov_factor.shape)
         cov_factor = cov_factor.transpose(-2,-1)
+        #print(cov_factor.shape)
     with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
         X = pyro.sample('obs', dist.LowRankMultivariateNormal(torch.zeros(D), cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
     return X
@@ -269,7 +273,7 @@ def projectedMixture(X, batch_size, prior_parameters):
             locs = pyro.sample('locs', dist.Normal(locloc,locscale))
     with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
         assignment = pyro.sample('assignment', dist.Categorical(component_logits), infer={"enumerate": "parallel"})
-        X = pyro.sample('obs', dist.LowRankMultivariateNormal(locs[assignment], cov_factor, cov_diag), obs=X.index_select(0, ind))
+        X = pyro.sample('obs', dist.LowRankMultivariateNormal(locs.index_select(-2, assignment), cov_factor, cov_diag), obs=X.index_select(0, ind))
     return X
 
 def projectedMixtureGuide(X, batch_size, variational_parameter_initialization):
@@ -301,10 +305,11 @@ def projectedMixtureGuide(X, batch_size, variational_parameter_initialization):
 
 def sphericalMixture(X, batch_size, prior_parameters):
     """
-    Covariances of all clusters are diagonal, we're just learning mixture weights and means
+    Covariances of all clusters are diagonal, only params are mixture weights, means and variances
     """
     N, D = X.shape
     locloc, locscale, scaleloc, scalescale, component_logits_concentration = prior_parameters[0]
+    # get number of clusters from first dimension of means
     C = locloc.shape[0]
     component_logits = pyro.sample('component_logits', dist.Dirichlet(component_logits_concentration))
     with pyro.plate('D', D):
@@ -313,12 +318,20 @@ def sphericalMixture(X, batch_size, prior_parameters):
             locs = pyro.sample('locs', dist.Normal(locloc,locscale))
     with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
         assignment = pyro.sample('assignment', dist.Categorical(component_logits), infer={"enumerate": "parallel"})
-        X = pyro.sample('obs', dist.MultivariateNormal(locs[assignment], torch.diag(cov_diag)), obs=X.index_select(0, ind))
+        #X = pyro.sample('obs', dist.MultivariateNormal(locs.index_select(-2, assignment), torch.diag(cov_diag)), obs=X.index_select(0, ind))
+        # use index_select instead of locs[assignment] so batching works correctly
+        # have to select the right index both in a parallel enumeration context and a batch context
+        # leading to this ugly hack
+        indexed_locs = locs.index_select(-2, assignment.squeeze()).view(*locs.shape[:-2],*assignment.shape,locs.shape[-1])
+        #print(locs.shape)
+        #print(assignment.shape)
+        #print(indexed_locs.shape)
+        X = pyro.sample('obs', dist.MultivariateNormal(indexed_locs, torch.diag_embed(cov_diag)), obs=X.index_select(0, ind))
     return X
 
 def sphericalMixtureGuide(X, batch_size, variational_parameter_initialization):
     """
-    Covariances of all clusters are diagonal, we're just learning mixture weights and means
+    Covariances of all clusters are diagonal, only params are mixture weights, means and variances
     """
     N, D = X.shape
     locloc, locscale, scaleloc, scalescale, component_logits_concentration = variational_parameter_initialization[1]

@@ -13,7 +13,7 @@ import pyro
 import sys
 import pyro.optim
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO
-from pyro.infer.predictive import _predictive
+from pyro.infer.predictive import _predictive, _guess_max_plate_nesting
 from torch.distributions import constraints
 from pyro import distributions as dst
 from collections import defaultdict
@@ -34,11 +34,21 @@ def get_lppd(model, guide, data, init, n_samples = 1000, verbose = False):
     assert n_samples*data.shape[0] < 1e8
     # sample N latent variables from guide
     posterior_samples = _predictive(guide, {}, n_samples, parallel = True, model_args = [data[0:1,:], 1, init])
+    
     # posterior_samples['scale'] is by default a (n_samples,1,D), needs to be (n_samples,D) or we get a Cartesian product
     posterior_samples['scale'] = torch.squeeze(posterior_samples['scale'])
+
+    # squeeze any singleton dimensions in posterior_samples
+    #posterior_samples = {k:torch.squeeze(v) for (k,v) in posterior_samples.items()}
     # condition N models on latent variables
     unconditioned_model = pyro.poutine.uncondition(model)
+
+    #max_plate_nesting = _guess_max_plate_nesting(unconditioned_model, (torch.empty((1,data.shape[1])), 1, init), {})
+    #vectorize = pyro.plate("_num_predictive_samples", n_samples, dim=-max_plate_nesting-1)
     pred = pyro.poutine.condition(unconditioned_model, posterior_samples)
+    #pred = pyro.poutine.condition(vectorize(unconditioned_model), posterior_samples)
+    #pred = pyro.poutine.block(pred, hide=["N"])
+    #pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     pred_trace = pyro.poutine.trace(pred).get_trace(torch.empty((n_samples,data.shape[1])), n_samples, init)
     # get log_prob of each of the N conditioned models on test data
     log_probs = torch.empty((data.shape[0],n_samples))
@@ -83,8 +93,8 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     #for name, value in pyro.get_param_store().named_parameters():
     #    value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
 
-    # print current job
-    print("Training {} with {}".format(model.__repr__(), init[0][0]))
+    # print current jo
+b    print("Training {} with {}".format(model.__repr__(), init[0][0]))
     # optimize
     i = 0
     lppds = []
