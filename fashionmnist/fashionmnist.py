@@ -41,7 +41,7 @@ def get_param_history_of_best_restart(model):
 
 def sleep_until_file_exists(file):
     seconds_passed = 0
-    while not os.path.exists(file) or seconds_passed > 3600*2:
+    while not os.path.exists(file) and seconds_passed < 3600*2:
         print("Going to sleep until {} exists".format(file))
         time.sleep(1)
         seconds_passed += 1
