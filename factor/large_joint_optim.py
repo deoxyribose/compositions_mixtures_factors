@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments for incremental inference in ppca')
     parser.add_argument('dataseed', type=int, help='Random seed for generating data')
     parser.add_argument('initseed', type=int, help='Random seed for variational parameter initialization')
+    parser.add_argument('smoke_test', type=bool, nargs='?', const = True, default=False)
     args = parser.parse_args()
     # set seed so that the same initalization and MC samples are used throughout the experiment (except the informative priors)
     pyro.set_rng_seed(args.dataseed)
@@ -34,26 +35,53 @@ if __name__ == '__main__':
     ####################
     # define parameters shared between conditions
 
-    n_experimental_conditions = 2
-    max_n_iter = 1500
-    dgp_prior_std = 1
-    proportion_of_data_for_testing = 0.1
-    n_posterior_samples = 1000
+    smoke_test = args.smoke_test
 
-    # optimization parameters
-    n_multistart = 6
-    learning_rate = 0.05
-    momentum1 = 0.9
-    momentum2 = 0.999
-    decay = 1.
-    batch_size = 10
-    n_mc_samples = 10
-    window = 3 # compute lppd every window iterations
-    convergence_window = 10 # estimate slope of convergence_window lppds
-    slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
+    if smoke_test:
+        n_experimental_conditions = 2
+        max_n_iter = 20
+        dgp_prior_std = 1
+        proportion_of_data_for_testing = 0.1
+        n_posterior_samples = 100
 
-    for totalN in [5000,10000]:
-        for D in [50,500]:#[20,30]: #
+        # optimization parameters
+        n_multistart = 2
+        learning_rate = 0.05
+        momentum1 = 0.9
+        momentum2 = 0.999
+        decay = 1.
+        batch_size = 10
+        n_mc_samples = 2
+        window = 10 # compute lppd every window iterations
+        convergence_window = 10 # estimate slope of convergence_window lppds
+        slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
+        lowN = 50
+        lowD = 5
+        Kmax = 2
+    else:
+        n_experimental_conditions = 2
+        max_n_iter = 1500
+        dgp_prior_std = 1
+        proportion_of_data_for_testing = 0.1
+        n_posterior_samples = 1000
+
+        # optimization parameters
+        n_multistart = 6
+        learning_rate = 0.05
+        momentum1 = 0.9
+        momentum2 = 0.999
+        decay = 1.
+        batch_size = 10
+        n_mc_samples = 10
+        window = 3 # compute lppd every window iterations
+        convergence_window = 10 # estimate slope of convergence_window lppds
+        slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
+        lowN = 5000
+        lowD = 50
+        Kmax = 10
+
+    for totalN in [lowN,lowN*2]:
+        for D in [lowD,lowD*10]:
             print("Running experiment with {} {}-dimensional observations".format(totalN, D))
             trueK = 7#D//3
             trueinit = get_h_and_v_params(trueK,D,experimental_condition = None, prior_std = 1)
@@ -71,7 +99,6 @@ if __name__ == '__main__':
             ####################
             # generate data
             #Kmax = 8#D//2
-            Kmax = 10#D//2
             prior_std = 1
             #####################
             # train models
@@ -81,14 +108,14 @@ if __name__ == '__main__':
                     # all K=1 models, seeds and data are identical, so just load it
                     if experimental_condition > 0 and experimental_condition < 4 and K == 1:
                         K1model = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,prior_std)
-                        _,_,_,param_history,_,_ = pickle.load(open(K1model, 'rb'))
+                        _,_,param_history,_,_ = pickle.load(open(K1model, 'rb'))
                         continue
                     elif experimental_condition == 0:
                         param_history = None
                     filename = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,prior_std)
                     # if experiment gets interrepted, continue from loaded results
                     if os.path.exists(filename):
-                        _,_,_,param_history,_,_ = pickle.load(open(filename, 'rb'))
+                        _,_,param_history,_,_ = pickle.load(open(filename, 'rb'))
                         data = trace.nodes['obs']['value']
                         print("Model has been run before, loading from {}.".format(filename))
                         continue
@@ -102,8 +129,9 @@ if __name__ == '__main__':
                         pyro.clear_param_store()
                         # initialize
                         init = get_h_and_v_params(K, D, experimental_condition, prior_std, data, param_history)
-                        inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                        _, _, lppds, _, init,_ = inference_results
+                        inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, convergence_window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                        _, lppds, _, init,elapsed_time = inference_results
+                        print("Restart took {} seconds".format(elapsed_time))
                         loss_after_init = sum(lppds[-3:])/3
                         inits.append(lppds)
                     #    if loss_after_init < best_loss_after_init:
@@ -116,4 +144,5 @@ if __name__ == '__main__':
                     print('\nTraining took {} seconds'.format(round(end - start))) 
             ########################
             # save models
-                    pickle.dump((trace, losses, lppds, param_history, inits, round(end - start)),open(filename, "wb" ))
+                    pickle.dump(inference_results,open(filename, "wb" ))
+    print("All training done.")

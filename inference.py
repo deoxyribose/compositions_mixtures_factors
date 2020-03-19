@@ -61,10 +61,10 @@ def compute_lppd(model, guide, data, init, n_samples = 1000):
         log_probs[:,model_idx] = posterior_predictive.nodes['obs']['fn'].log_prob(data)
     return (torch.logsumexp(log_probs,dim=1)-np.log(np.float(n_samples))).mean()
 
-def inference(model, guide, training_data, test_data, init, n_iter = 10000, window = 500, batch_size = 10, n_mc_samples = 16, learning_rate = 0.1, learning_rate_decay = 0.9999, n_posterior_samples = 800, slope_significance = 0.5, track_params = False):
+def inference(model, guide, training_data, test_data, init, n_iter = 10000, window = 500, convergence_window = 30, batch_size = 10, n_mc_samples = 10, learning_rate = 0.1, learning_rate_decay = 0.9999, n_posterior_samples = 800, slope_significance = 0.5, track_params = False):
     pyro.clear_param_store()
     initcopy = clone_init(init)
-
+    monitor_gradients = False
     #def per_param_callable(module_name, param_name):
     #    return {"lr": learning_rate, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
     conditioned_model = pyro.condition(model, data = {'obs': training_data})
@@ -74,7 +74,7 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     if 'Mixture' in model.__repr__():
         elbo = TraceEnum_ELBO(max_plate_nesting=3)
     else:
-        elbo = Trace_ELBO(num_particles=10, vectorize_particles=True)
+        elbo = Trace_ELBO(max_plate_nesting=3, num_particles=n_mc_samples, vectorize_particles=True)
     svi = SVI(model, guide, scheduler, loss=elbo)
 
     # Register hooks to monitor gradient norms.
@@ -83,13 +83,16 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     gradient_norms = defaultdict(list)
     loss = svi.step(training_data, batch_size, init)
     param_history = dict({k:v.unsqueeze(0) for k,v in pyro.get_param_store().items()})
-    # register gradient hooks for monitoring
-    #for name, value in pyro.get_param_store().named_parameters():
-    #    value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
+    
+    if monitor_gradients:
+        # register gradient hooks for monitoring
+        for name, value in pyro.get_param_store().named_parameters():
+            value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))
 
     # print current job
     print("Training {} with {}".format(model.__repr__(), init[0][0]))
     # optimize
+    start = time.time()
     i = 0
     lppds = []
     with torch.no_grad():
@@ -97,13 +100,13 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
 #        lppd = get_lppd2(model, guide, test_data, init, n_samples=n_posterior_samples)
 #        print("Computing lppd took {}".format(time.time() - start))
 
-        start = time.time()
+        #start = time.time()
         lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
-        print("Computing lppd took {}".format(time.time() - start))
+        #print("Computing lppd took {}".format(time.time() - start))
         lppds.append(-lppd)
-        print(lppds[-1])
+        print("NLL at init is {}".format(lppds[-1]))
 
-    while p_value_of_slope(lppds,10, slope_significance) < slope_significance and i < n_iter:
+    while p_value_of_slope(lppds,convergence_window, slope_significance) < slope_significance and i < n_iter:
         try:
             loss = svi.step(training_data, batch_size, init)
             if i % window or i <= window:
@@ -111,14 +114,13 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
                 scheduler.step()
             else:
                 with torch.no_grad():
-                    start = time.time()
+                    #start = time.time()
                     lppd = compute_lppd(model, guide, test_data, init, n_samples=n_posterior_samples)
-                    print("Computing lppd took {}".format(time.time() - start))
+                    #print("Computing lppd took {}".format(time.time() - start))
                     lppds.append(-lppd)
                     print('\n')
-                    print(lppds[-1])
+                    print("NLL after {}/{} iterations is {}".format(i,n_iter, lppds[-1]))
                 print('\n')
-                print('{}/{}'.format(i,n_iter))
                 #print('\nSetting number of posterior samples to {}'.format(n_posterior_samples), end='')
                 #print('\nSetting batch size to {}'.format(batch_size), end='')
             losses.append(loss)
@@ -129,11 +131,11 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
             i += 1
         except KeyboardInterrupt:
             print('\Interrupted by user after {} iterations.\n'.format(i))
-            return svi, losses, lppds, param_history, init, gradient_norms
+            return svi, losses, lppds, param_history, init, gradient_norms, round(time.time() - start)
     print('\nConverged in {} iterations.\n'.format(i))
     # make all pytorch tensors into np arrays, which consume less disk space
     param_history = dict(zip(param_history.keys(),map(lambda x: x.detach().numpy(), param_history.values())))
     if not track_params:
         # save just last values, since that's all we need for incremental inference, and the rest fills too much space
         param_history = dict(zip(param_history.keys(), map(lambda x: x[-1], param_history.values())))
-    return svi, losses, lppds, param_history, initcopy, gradient_norms
+    return losses, lppds, param_history, initcopy, round(time.time() - start)

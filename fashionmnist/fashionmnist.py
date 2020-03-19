@@ -32,7 +32,7 @@ def get_param_history_of_best_restart(model):
         results = pickle.load(f)
     best_lppd_at_convergence = np.inf
     for result in results:
-        _,_,lppds,param_history,_,_ = result
+        _,lppds,param_history,_,_ = result
         mean_lppd_at_convergence = sum(lppds[-10:])/10
         if mean_lppd_at_convergence < best_lppd_at_convergence:
             best_lppd_at_convergence = mean_lppd_at_convergence
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     momentum2 = 0.999
     decay = 1.
     batch_size = 10
-    n_mc_samples = 16
+    n_mc_samples = 10
     slope_significance = 1. # p_value of slope has to be smaller than this for training to continue
 
     if smoke_test:
@@ -94,7 +94,7 @@ if __name__ == '__main__':
         max_n_iter = 1000
         n_posterior_samples = 1000
         # optimization parameters
-        n_multistart = 5
+        n_multistart = 2#5
         window = 10 # compute lppd every window iterations
         convergence_window = 30 # estimate slope of convergence_window lppds
 
@@ -104,10 +104,11 @@ if __name__ == '__main__':
     data = x_train
     test_data = x_valid
 
+    #pyro.set_rng_seed(args.initseed)
     for condition in range(n_conditions):
         print("Condition {}".format(condition))
         for K in range(Kmin, Kmax+1):
-            pyro.set_rng_seed(args.initseed)
+            print("Training model with {} latent variables in condition {}".format(K,condition))
 
             # load the previous model
             if condition == 1:
@@ -138,8 +139,8 @@ if __name__ == '__main__':
                 init = get_h_and_v_params(K, D, condition, 1, data, param_history)
                 #if smoke_test:
                     #print('Init is {}'.format(init[0][1]    ))
-                inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                print(inference_result[4][1][:10])
+                inference_result = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, convergence_window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
+                print(str(inference_result[3])[:100])
                 # save the restart
                 restart_filename = "{}_restart_{}_factors_{}_fashionMNIST.p".format(restart,K,condition)
                 with open(restart_filename, 'wb') as f:
@@ -158,6 +159,7 @@ if __name__ == '__main__':
                 # save as one pickle
                 filename = "{}_factors_{}_fashionMNIST.p".format(K,condition)
                 print("Aggregating restarts in {}".format(filename))
+                print("\n")
                 with open(filename, 'wb') as f:
                     pickle.dump(inference_results, f)
     # clean-up

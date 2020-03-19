@@ -192,9 +192,10 @@ def zeroMeanFactor2(X, batch_size, prior_parameters):
             #print(cov_factor.shape)
             #print(cov_factor_new.shape)
             if cov_factor_new.dim() == cov_factor.dim():
-                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
+                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
+                #cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
             else:
-                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
         else:
             with pyro.plate('K', K):
                 cov_factor_loc = pyro.param('cov_factor_loc_hyper_{}'.format(K), cov_factor_locinit)
@@ -227,9 +228,9 @@ def zeroMeanFactorGuide(X, batch_size, variational_parameter_initialization):
             cov_factor_new = pyro.sample('cov_factor_new', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
             # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
             if cov_factor_new.dim() == cov_factor.dim():
-                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
+                cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
             else:
-                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+                cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
         else:
             with pyro.plate('K', K):
                 cov_factor_loc = pyro.param('cov_factor_loc_{}'.format(K), cov_factor_loc_init)
@@ -305,7 +306,8 @@ def projectedMixtureGuide(X, batch_size, variational_parameter_initialization):
 
 def sphericalMixture(X, batch_size, prior_parameters):
     """
-    Covariances of all clusters are diagonal, only params are mixture weights, means and variances
+    Covariances of all clusters are diagonal, only params are mixture weights, means and shared variable variances
+    ...so it's actually an ellipsoidal mixture, if you wanna be anal about it. Cunt.
     """
     N, D = X.shape
     locloc, locscale, scaleloc, scalescale, component_logits_concentration = prior_parameters[0]
@@ -331,7 +333,7 @@ def sphericalMixture(X, batch_size, prior_parameters):
 
 def sphericalMixtureGuide(X, batch_size, variational_parameter_initialization):
     """
-    Covariances of all clusters are diagonal, only params are mixture weights, means and variances
+    Covariances of all clusters are diagonal, only params are mixture weights, means and a shared variable variances
     """
     N, D = X.shape
     locloc, locscale, scaleloc, scalescale, component_logits_concentration = variational_parameter_initialization[1]
@@ -347,3 +349,60 @@ def sphericalMixtureGuide(X, batch_size, variational_parameter_initialization):
             locscale = pyro.param('loc_scale', locscale, constraint=constraints.positive)
             locs = pyro.sample('locs', dist.Normal(locloc,locscale))
     return component_logits, cov_diag, locs
+
+def scaledSphericalMixture(X, batch_size, prior_parameters):
+    """
+    Covariances of all clusters are diagonal, only params are mixture weights, means and shared variable variances
+    ...so it's actually an ellipsoidal mixture, if you wanna be anal about it. Cunt.
+    """
+    N, D = X.shape
+    locloc, locscale, scaleloc, scalescale, covscalingloc, covscalingscale, component_logits_concentration = prior_parameters[0]
+    # get number of clusters from first dimension of means
+    C = locloc.shape[0]
+    Cplate = pyro.plate('C', C)
+    component_logits = pyro.sample('component_logits', dist.Dirichlet(component_logits_concentration))
+    with pyro.plate('D', D):
+        cov_diag = pyro.sample('scale', dist.LogNormal(scaleloc, scalescale))
+        with Cplate:
+            locs = pyro.sample('locs', dist.Normal(locloc,locscale))
+    with Cplate:
+        cov_scaling = pyro.sample('cov_scaling', dist.LogNormal(covscalingloc, covscalingscale))
+    with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
+        assignment = pyro.sample('assignment', dist.Categorical(component_logits), infer={"enumerate": "parallel"})
+        #X = pyro.sample('obs', dist.MultivariateNormal(locs.index_select(-2, assignment), torch.diag(cov_diag)), obs=X.index_select(0, ind))
+        # use index_select instead of locs[assignment] so batching works correctly
+        # have to select the right index both in a parallel enumeration context and a batch context
+        # leading to this ugly hack
+        indexed_locs = locs.index_select(-2, assignment.squeeze()).view(*locs.shape[:-2],*assignment.shape,locs.shape[-1])
+        #print(locs.shape)
+        #print(assignment.shape)
+        #print(indexed_locs.shape)
+        scaled_covariances = torch.diag_embed(cov_scaling[assignment]*cov_diag)
+        X = pyro.sample('obs', dist.MultivariateNormal(indexed_locs, scaled_covariances), obs=X.index_select(0, ind))
+    return X
+
+def scaledSphericalMixtureGuide(X, batch_size, variational_parameter_initialization):
+    """
+    Covariances of all clusters are diagonal, only params are mixture weights, means and shared variable variances
+    ...so it's actually an ellipsoidal mixture, if you wanna be anal about it. Cunt.
+    """
+    N, D = X.shape
+    locloc, locscale, scaleloc, scalescale, covscalingloc, covscalingscale, component_logits_concentration = variational_parameter_initialization[1]
+    # get number of clusters from first dimension of means
+    C = locloc.shape[0]
+    Cplate = pyro.plate('C', C)
+    component_logits_concentration = pyro.param('component_logits_concentration', component_logits_concentration, constraint=constraints.positive)
+    component_logits = pyro.sample('component_logits', dist.Dirichlet(component_logits_concentration))
+    with pyro.plate('D', D):
+        cov_diag_loc = pyro.param('scale_loc', scaleloc)
+        cov_diag_scale = pyro.param('scale_scale', scalescale, constraint=constraints.positive)
+        cov_diag = pyro.sample('scale', dist.LogNormal(scaleloc, scalescale))
+        with Cplate:
+            locloc = pyro.param('loc_loc', locloc)
+            locscale = pyro.param('loc_scale', locscale, constraint=constraints.positive)
+            locs = pyro.sample('locs', dist.Normal(locloc,locscale))
+    with Cplate:
+        cov_scaling_loc = pyro.param('cov_scaling_loc', covscalingloc)
+        cov_scaling_scale = pyro.param('cov_scaling_scale', covscalingscale, constraint=constraints.positive)
+        cov_scaling = pyro.sample('cov_scaling', dist.LogNormal(covscalingloc, covscalingscale))
+    return component_logits, cov_diag, cov_scaling, locs
