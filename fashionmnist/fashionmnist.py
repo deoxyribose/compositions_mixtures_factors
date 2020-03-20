@@ -91,10 +91,10 @@ if __name__ == '__main__':
         Kmin = 1
         Kmax = 3
     else:
-        max_n_iter = 1000
+        max_n_iter = 2000
         n_posterior_samples = 1000
         # optimization parameters
-        n_multistart = 2#5
+        n_multistart = 5
         window = 10 # compute lppd every window iterations
         convergence_window = 30 # estimate slope of convergence_window lppds
 
