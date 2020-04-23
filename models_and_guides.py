@@ -170,6 +170,8 @@ def zeroMeanFactor(X, batch_size, prior_parameters):
 def zeroMeanFactor2(X, batch_size, prior_parameters):
     """
     Parameters are K, locloc, locscale, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+
+    NEED TO CHECK ALL SHAPES FOR SUPERFLUOUS SINGLETON DIMENSIONS
     """
     N, D = X.shape
     K, scalelocinit, scalescaleinit, cov_factor_locinit, cov_factor_scaleinit = prior_parameters[0]
@@ -360,12 +362,19 @@ def scaledSphericalMixture(X, batch_size, prior_parameters):
     # get number of clusters from first dimension of means
     C = locloc.shape[0]
     Cplate = pyro.plate('C', C)
+    component_logits_concentration = pyro.param('component_logits_concentration_hyper', component_logits_concentration, constraint=constraints.positive)
     component_logits = pyro.sample('component_logits', dist.Dirichlet(component_logits_concentration))
     with pyro.plate('D', D):
+        cov_diag_loc = pyro.param('scale_loc_hyper', scaleloc)
+        cov_diag_scale = pyro.param('scale_scale_hyper', scalescale, constraint=constraints.positive)
         cov_diag = pyro.sample('scale', dist.LogNormal(scaleloc, scalescale))
         with Cplate:
+            locloc = pyro.param('loc_loc_hyper', locloc)
+            locscale = pyro.param('loc_scale_hyper', locscale, constraint=constraints.positive)
             locs = pyro.sample('locs', dist.Normal(locloc,locscale))
     with Cplate:
+        cov_scaling_loc = pyro.param('cov_scaling_loc_hyper', covscalingloc)
+        cov_scaling_scale = pyro.param('cov_scaling_scale_hyper', covscalingscale, constraint=constraints.positive)
         cov_scaling = pyro.sample('cov_scaling', dist.LogNormal(covscalingloc, covscalingscale))
     with pyro.plate('N', size=N, subsample_size=batch_size) as ind:
         assignment = pyro.sample('assignment', dist.Categorical(component_logits), infer={"enumerate": "parallel"})

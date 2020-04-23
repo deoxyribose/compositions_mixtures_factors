@@ -67,7 +67,6 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     monitor_gradients = False
     #def per_param_callable(module_name, param_name):
     #    return {"lr": learning_rate, "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
-    conditioned_model = pyro.condition(model, data = {'obs': training_data})
     optim = torch.optim.Adam
     scheduler = pyro.optim.ExponentialLR({'optimizer': optim, 'optim_args': {"lr": learning_rate, "betas": (0.90, 0.999)}, 'gamma': learning_rate_decay})
     #scheduler = pyro.optim.ExponentialLR({'optimizer': optim, 'optim_args': per_param_callable, 'gamma': learning_rate_decay})
@@ -80,11 +79,11 @@ def inference(model, guide, training_data, test_data, init, n_iter = 10000, wind
     # Register hooks to monitor gradient norms.
     losses = []
     lrs = []
-    gradient_norms = defaultdict(list)
     loss = svi.step(training_data, batch_size, init)
     param_history = dict({k:v.unsqueeze(0) for k,v in pyro.get_param_store().items()})
     
     if monitor_gradients:
+        gradient_norms = defaultdict(list)
         # register gradient hooks for monitoring
         for name, value in pyro.get_param_store().named_parameters():
             value.register_hook(lambda g, name=name: gradient_norms[name].append(g.norm().item()))

@@ -25,19 +25,8 @@ from tracepredictive import *
 from inference import *
 from models_and_guides import *
 from large_joint_optim import *
+from initializations import *
 
-def get_param_history_of_best_restart(model):
-    print("Loading best restart from {}".format(model))
-    with open(model, 'rb') as f:
-        results = pickle.load(f)
-    best_lppd_at_convergence = np.inf
-    for result in results:
-        _,lppds,param_history,_,_ = result
-        mean_lppd_at_convergence = sum(lppds[-10:])/10
-        if mean_lppd_at_convergence < best_lppd_at_convergence:
-            best_lppd_at_convergence = mean_lppd_at_convergence
-            best_param_history = param_history
-    return best_param_history
 
 def sleep_until_file_exists(file):
     seconds_passed = 0

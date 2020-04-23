@@ -5,7 +5,7 @@ import pyro
 import pyro.optim
 from pyro.infer import SVI, Trace_ELBO
 from torch.distributions import constraints
-from pyro import distributions as dst
+from pyro import distributions as dist
 from collections import defaultdict
 import matplotlib.pylab as plt
 import time
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     smoke_test = args.smoke_test
 
     if smoke_test:
-        n_experimental_conditions = 2
+        n_conditions = 3
         max_n_iter = 20
         dgp_prior_std = 1
         proportion_of_data_for_testing = 0.1
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         lowD = 5
         Kmax = 2
     else:
-        n_experimental_conditions = 2
+        n_conditions = 3
         max_n_iter = 1500
         dgp_prior_std = 1
         proportion_of_data_for_testing = 0.1
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         for D in [lowD,lowD*10]:
             print("Running experiment with {} {}-dimensional observations".format(totalN, D))
             trueK = 7#D//3
-            trueinit = get_h_and_v_params(trueK,D,experimental_condition = None, prior_std = 1)
+            trueinit = get_h_and_v_params(trueK,D,condition = None, prior_std = 1)
             dgp = pyro.poutine.uncondition(zeroMeanFactor)
             trace = pyro.poutine.trace(dgp).get_trace(torch.zeros(totalN,D),totalN,trueinit)
             logp = trace.log_prob_sum()
@@ -102,17 +102,11 @@ if __name__ == '__main__':
             prior_std = 1
             #####################
             # train models
-            for experimental_condition in range(n_experimental_conditions):
+            for condition in range(n_conditions):
                 for K in range(1,Kmax+1):
                     pyro.set_rng_seed(args.initseed)
-                    # all K=1 models, seeds and data are identical, so just load it
-                    if experimental_condition > 0 and experimental_condition < 4 and K == 1:
-                        K1model = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(1,0, args.dataseed, args.initseed,N,D,prior_std)
-                        _,_,param_history,_,_ = pickle.load(open(K1model, 'rb'))
-                        continue
-                    elif experimental_condition == 0:
-                        param_history = None
-                    filename = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,str(experimental_condition), args.dataseed, args.initseed,N,D,prior_std)
+                    filename = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K,condition, args.dataseed, args.initseed,N,D,prior_std)
+
                     # if experiment gets interrepted, continue from loaded results
                     if os.path.exists(filename):
                         _,_,param_history,_,_ = pickle.load(open(filename, 'rb'))
@@ -120,20 +114,37 @@ if __name__ == '__main__':
                         print("Model has been run before, loading from {}.".format(filename))
                         continue
                     start = time.time()
-                    print('\nTraining model with {} factors with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, experimental_condition, N, D))
+
+                    print('\nTraining model with {} factors with prior_std {} in experimental condition {} on data with {} observations in {} dimensions '.format(K, prior_std, condition, N, D))
                     
+                    # if we are in the incremental condition, load best restart from previous model
+                    if condition == 1:
+                        if K == 1:
+                            continue
+                        elif K ==2:
+                            # load best restart from K=1, condition=0
+                            c = 0
+                        else:
+                            # load best restart from K-1, condition=1
+                            c = 1
+                        prevmodel = "{}_factors_{}_dataseed_{}_initseed_{}_N_{}_D_{}_priorstd_{}.p".format(K-1,c, args.dataseed, args.initseed,N,D,prior_std)
+                        param_history = get_param_history_of_best_restart(prevmodel)
+                        print(prevmodel)
+                    elif condition == 0:
+                        param_history = None
+
                     best_loss_after_init = np.inf
-                    inits = []
+                    inference_results_for_all_restarts = []
                     for restart in range(n_multistart):
+                        restart_start = time.time()
                         print('Multistart {}/{}'.format(restart+1,n_multistart))
                         pyro.clear_param_store()
                         # initialize
-                        init = get_h_and_v_params(K, D, experimental_condition, prior_std, data, param_history)
+                        init = get_h_and_v_params(K, D, condition, prior_std, data, param_history)
+                        # train
                         inference_results = inference(zeroMeanFactor2, zeroMeanFactorGuide, data, test_data, init, max_n_iter, window, convergence_window, batch_size, n_mc_samples, learning_rate, decay, n_posterior_samples, slope_significance)
-                        _, lppds, _, init,elapsed_time = inference_results
-                        print("Restart took {} seconds".format(elapsed_time))
-                        loss_after_init = sum(lppds[-3:])/3
-                        inits.append(lppds)
+                        print("Restart took {} seconds".format(time.time()-restart_start))
+                        inference_results_for_all_restarts.append(inference_results)
                     #    if loss_after_init < best_loss_after_init:
                     #        best_loss_after_init = loss_after_init
                     #        best_init = init
@@ -144,5 +155,5 @@ if __name__ == '__main__':
                     print('\nTraining took {} seconds'.format(round(end - start))) 
             ########################
             # save models
-                    pickle.dump(inference_results,open(filename, "wb" ))
+                    pickle.dump(inference_results_for_all_restarts,open(filename, "wb" ))
     print("All training done.")
