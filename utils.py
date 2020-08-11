@@ -1,7 +1,10 @@
-import torch
+import numpy as np
 
-def rel_err(true_parameter,estimated_parameter):
-    if type(true_parameter) != torch.Tensor:
-        true_parameter = torch.Tensor(true_parameter)
-    norm = torch.norm
-    return norm(true_parameter-estimated_parameter)/norm(true_parameter)
+def train_test_split(X, proportion_of_data_for_testing = 0.1):
+    N,_ = X.shape
+    test_idxs = np.random.choice(N,size=int(N*proportion_of_data_for_testing),replace=False)
+    mask = np.ones(N,dtype=bool)
+    mask[test_idxs] = False 
+    data = X[mask]
+    test_data = X[~mask]
+    return data, test_data
