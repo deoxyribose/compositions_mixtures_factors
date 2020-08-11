@@ -27,15 +27,15 @@ import re
 
 # define inference config
 config = dict(
-    n_iter = 2000,
+    n_iter = 700,
     learning_rate = 0.1,
     beta1 = 0.9,
     beta2 = 0.999,
     learning_rate_decay = 0.9999,
     batch_size = 16,
     n_elbo_particles = 16,
-    n_posterior_samples = 512*2,
-    window = 3,
+    n_posterior_samples = 512,
+    window = 10,
     convergence_window = 15,
     slope_significance = 1,#0.1,
     track_params = True,
@@ -102,6 +102,8 @@ def train_job(dataset_filename, K, restart, init):
 	elif init == 'ard':
 		_id = '_'.join([str(restart), init])
 		model = ZeroMeanFactorARD(data, config['batch_size'], _id)
+	elif init == 'rng':
+		pass
 	else:
 		print("Invalid init string.")
 
