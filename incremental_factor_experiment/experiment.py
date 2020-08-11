@@ -30,14 +30,14 @@ from generate_dataset import generate_dataset
 from train_job import *
 
 # test
-D = 2
-K = 1
-N = 100
+#D = 2
+#K = 1
+#N = 100
 
 # dataset settings
-#D = 10
-#K = 4
-#N = 5000
+D = 10
+K = 4
+N = 5000
 seed = 45
 
 #D = 500

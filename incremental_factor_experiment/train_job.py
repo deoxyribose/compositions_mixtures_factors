@@ -87,9 +87,8 @@ def train_job(dataset_filename, K, restart, init):
 
 
 	# FOR TESTING
-	config['n_iter'] = 16
-	config['n_posterior_samples'] = 16
-	# FOR TESTING
+	#config['n_iter'] = 16
+	#config['n_posterior_samples'] = 16
 
 	# set id, initialize parameters
 	_id = '_'.join([str(K), str(restart), init])
