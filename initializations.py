@@ -20,34 +20,82 @@ import sys
 sys.path.append("..")
 
 
-def set_uninformative_priors(K,D,prior_std, param_history = None):
-    scaleloc = torch.zeros(D)
-    scalescale = prior_std*torch.ones(D)
-    cov_factor_loc = torch.zeros(K,D)
-    cov_factor_scale = prior_std*torch.ones(K,D)
-    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+def set_uninformative_priors(param_shapes_and_support,noise_std=1, param_history = None):
+    # Noise adjustment not implemented yet
+    init = {}
+    for param_name, (shape, constraint) in param_shapes_and_support.items():
+        if constraint == constraints.real:
+            init[param_name] = torch.zeros(shape)
+        elif constraint == constraints.positive:
+            init[param_name] = torch.ones(shape)
+        else:
+            raise NotImplementedError
+    return init
 
-def set_random_variational_parameter_init(K,D,prior_std, param_history = None):
-    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
-    scalescale = torch.abs(torch.randn(D))
-    #scalescale = prior_std*torch.abs(torch.randn(1))
-    cov_factor_loc = torch.randn(K,D)
-    cov_factor_scale = torch.abs(torch.randn(K,D))
-    #cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
-    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+def get_random_init(param_shapes_and_support,noise_std=1, param_history = None):
+    init = {}
+    for param_name, (shape, constraint) in param_shapes_and_support.items():
+        if constraint == constraints.real:
+            init[param_name] = torch.randn(shape)
+        elif constraint == constraints.positive:
+            init[param_name] = torch.abs(torch.randn(shape))
+        else:
+            raise NotImplementedError
+    return init
 
-def set_PCA_variational_parameter_init(K,D,prior_std,data, param_history = None):
-    scaleloc = torch.abs(torch.randn(D))#torch.randn(D)
+def incremental_init(student, teacher):
+    # modify parameters of student model to those of the teacher model
+    # assumong student has been randomly initialized
+    # assuming both student and teacher have the same parameter names, modulo id
+    # assuming teacher has smaller- or equal-sized parameters
+    for param_name, param_value in student.param_init.items():
+        teacher_param_name = param_name.replace('init_'+student._id, teacher._id)
+        assert teacher_param_name in teacher.params.keys()
+        # if corresponding param has same shape, use it
+        if param_value.shape == teacher.params[teacher_param_name].shape:
+            student.param_init[param_name] = teacher.params[teacher_param_name]
+        # if corresponding param has fewer rows, replace those
+        elif param_value.shape[0] > teacher.params[teacher_param_name].shape[0]:
+            student.param_init[param_name][:teacher.params[teacher_param_name].shape[0]] = teacher.params[teacher_param_name]
+        else:
+            print(f"Parameter {param_name} and {teacher_param_name} have incompatible shapes.")
+
+def pca_init(model, data):
+    for param_name, param_value in model.param_init.items():
+        if param_name.startswith('cov_factor_loc'):
+            pca = PCA(n_components=model.K)
+            pca.fit(data)
+            model.param_init[param_name] = torch.tensor(pca.components_,dtype = torch.float32)
+#def set_uninformative_priors(K,D,noise_std=1, param_history = None):
+#    #scaleloc = torch.log(noise_std)+torch.randn(D)
+#    #scalescale = torch.ones(D)
+#    #cov_factor_loc = torch.zeros(K,D)
+#    #cov_factor_scale = noise_std*torch.ones(K,D)
+#    #return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+
+
+#def set_random_variational_parameter_init(K,D,noise_std=1, param_history = None):
+#    #scale is sampled from a log normal, so 
+#    scaleloc = torch.log(noise_std)+torch.randn(D)#torch.randn(D)
+#    #scalescale = torch.abs(torch.randn(D))
+#    scalescale = torch.abs(torch.randn(D))
+#    cov_factor_loc = torch.randn(K,D)
+#    cov_factor_scale = torch.abs(torch.randn(K,D))
+#    #cov_factor_scale = noise_std*torch.abs(torch.randn(K,D))
+#    return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
+
+def set_PCA_variational_parameter_init(K,D,data,noise_std=1,param_history = None):
+    scaleloc = torch.log(noise_std)+torch.randn(D)#torch.randn(D)
     scalescale = torch.abs(torch.randn(D))
-    #scalescale = prior_std*torch.abs(torch.randn(1))
+    #scalescale = noise_std*torch.abs(torch.randn(1))
     tmp = PCA(n_components=K)
     tmp.fit(data)
     cov_factor_loc = torch.tensor(tmp.components_,dtype = torch.float32)
     cov_factor_scale = torch.abs(torch.randn(K,D))
-    #cov_factor_scale = prior_std*torch.abs(torch.randn(K,D))
+    #cov_factor_scale = noise_std*torch.abs(torch.randn(K,D))
     return K, scaleloc, scalescale, cov_factor_loc, cov_factor_scale
 
-def set_incremental_hyperparameter_init(K,D,prior_std, param_history = None):
+def set_incremental_hyperparameter_init(K,D,param_history = None):
     print('Initializing hyperparameters in those learnt by previous model.')
     if K == 2:
         prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_hyper_{}'.format(K-1)])
@@ -63,11 +111,11 @@ def set_incremental_hyperparameter_init(K,D,prior_std, param_history = None):
     cov_loc_init = torch.zeros(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
     cov_scale_init = torch.ones(K,D)
-    #cov_scale_init = prior_std*torch.ones(K,D)
+    #cov_scale_init = noise_std*torch.ones(K,D)
     cov_scale_init[:K-1,:] = prev_posterior_scale
     return K, torch.tensor(param_history['scale_loc_hyper']),torch.tensor(param_history['scale_scale_hyper']),cov_loc_init,cov_scale_init
 
-def set_incremental_variational_parameter_init(K,D,prior_std, param_history = None):
+def set_incremental_variational_parameter_init(K,D,param_history = None):
     print('Initializing variational parameters in those learnt by previous model.')
     if K == 2:
         prev_posterior_loc = torch.tensor(param_history['cov_factor_loc_{}'.format(K-1)])
@@ -82,22 +130,23 @@ def set_incremental_variational_parameter_init(K,D,prior_std, param_history = No
     cov_loc_init = torch.randn(K,D)
     cov_loc_init[:K-1,:] = prev_posterior_loc
     cov_scale_init = torch.abs(torch.randn(K,D))
-    #cov_scale_init = prior_std*torch.abs(torch.randn(K,D))
+    #cov_scale_init = noise_std*torch.abs(torch.randn(K,D))
     cov_scale_init[:K-1,:] = prev_posterior_scale
     return K, torch.tensor(param_history['scale_loc']),torch.tensor(param_history['scale_scale']),cov_loc_init,cov_scale_init
 
-def get_h_and_v_params(K,D,condition = 0, prior_std = 1, data = None, param_history = None):
+def get_h_and_v_params(K,D,condition = 0, noise_std = 1, data = None, param_history = None):
     assert D > 0
     assert K > 0
+    noise_std = torch.tensor(noise_std)
     if condition == 0:
-        #return set_uninformative_priors(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
-        return set_random_variational_parameter_init(K, D, prior_std), set_PCA_variational_parameter_init(K,D,prior_std,data)
+        #return set_uninformative_priors(K, D, noise_std), set_random_variational_parameter_init(K, D, noise_std)
+        return set_random_variational_parameter_init(K, D, noise_std), set_PCA_variational_parameter_init(K,D,noise_std,data)
     if condition == 1:
         # since incremental variational parameters are the same as the incremental prior parameters
-    #    return set_uninformative_priors(K, D, prior_std), set_incremental_variational_parameter_init(K, D, prior_std)
-        return set_incremental_hyperparameter_init(K, D, prior_std, param_history), set_incremental_variational_parameter_init(K, D, prior_std, param_history)
+    #    return set_uninformative_priors(K, D, noise_std), set_incremental_variational_parameter_init(K, D, noise_std)
+        return set_incremental_hyperparameter_init(K, D, param_history), set_incremental_variational_parameter_init(K, D, param_history)
     else:
-        return set_random_variational_parameter_init(K, D, prior_std), set_random_variational_parameter_init(K, D, prior_std)
+        return set_random_variational_parameter_init(K, D, noise_std), set_random_variational_parameter_init(K, D, noise_std)
 
 
 def clone_init(init):
