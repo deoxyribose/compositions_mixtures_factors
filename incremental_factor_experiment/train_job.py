@@ -46,11 +46,11 @@ config = dict(
 def get_best_teacher(K):
 	# get list of all filenames
 	mypath = './'
-	if K == 2:
+	if K == 1:
 		teacher_init = 'rng'
 	else:
 		teacher_init = 'inc'
-	regex = re.compile(str(K-1)+'_\d_'+teacher_init+'.p')
+	regex = re.compile(str(K)+'_\d_'+teacher_init+'.p')
 	previous_K_files = [f for f in listdir(mypath) if isfile(join(mypath, f)) and re.match(regex, f)]
 	
 	models = []
@@ -92,17 +92,22 @@ def train_job(dataset_filename, K, restart, init):
 
 	# set id, initialize parameters
 	_id = '_'.join([str(K), str(restart), init])
-	model = ZeroMeanFactor(data, K, config['batch_size'], _id)
+	# set seed for initialization, to allow reproducibility
+	pyro.set_rng_seed(restart)
+
 	if init == 'pca':
+		model = ZeroMeanFactor(data, K, config['batch_size'], _id)
 		pca_init(model, data)
 	elif init == 'inc':
+		model = ZeroMeanFactor(data, K, config['batch_size'], _id)
 		if K > 1:
-			teacher = get_best_teacher(K)
+			teacher = get_best_teacher(K-1)
 			incremental_init(model, teacher)
 	elif init == 'ard':
 		_id = '_'.join([str(restart), init])
 		model = ZeroMeanFactorARD(data, config['batch_size'], _id)
 	elif init == 'rng':
+		model = ZeroMeanFactor(data, K, config['batch_size'], _id)
 		pass
 	else:
 		print("Invalid init string.")
@@ -115,6 +120,7 @@ def train_job(dataset_filename, K, restart, init):
 
 	inference_args = (model, data, test_data, config)
 	inference_results = inference(*inference_args)
+
 
 	filename = _id + '.p'
 	with open(filename, 'wb') as f:

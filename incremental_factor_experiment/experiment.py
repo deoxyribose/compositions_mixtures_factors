@@ -52,8 +52,6 @@ Ks = range(1,D+1)
 restarts = range(10)
 inits = ['rng','pca','inc','ard']
 
-# need to do all restarts for a K first
-# because incremental init selects best restart from previous K
 for K in Ks:
 	for restart in restarts:
 		for init in inits:
@@ -64,4 +62,10 @@ for K in Ks:
 			# the first K in incremental initialization is the same as random initialization
 			if init == 'inc' and K == 1:
 				continue
-			train_job(dataset_filename, K, restart, init)
+			try:
+				train_job(dataset_filename, K, restart, init)
+			except RuntimeError:
+				# mark failure of training job
+				fail_filename = _id + 'failed'
+				with open(fail_filename, 'wb') as f:
+					pickle.dump([], f)
