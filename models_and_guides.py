@@ -193,6 +193,8 @@ class ZeroMeanFactor(Model):
             cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_locinit)
             cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
+            jitter = 1e-05
+            cov_diag = cov_diag + jitter
             with pyro.plate(f'K_{_id}', K):
                 cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init)
                 cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
@@ -215,7 +217,8 @@ class ZeroMeanFactor(Model):
             cov_diag_loc = pyro.param(f'cov_diag_loc_{_id}', cov_diag_loc_init)
             cov_diag_scale = pyro.param(f'cov_diag_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
-            cov_diag = cov_diag*torch.ones(D)
+            jitter = 1e-05
+            cov_diag = cov_diag + jitter
             # sample variables
             with pyro.plate(f'K_{_id}', K, dim=-2):
                 cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init)
@@ -263,6 +266,8 @@ class Factor(Model):
             cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_loc_init)
             cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
+            jitter = 1e-05
+            cov_diag = cov_diag + jitter
             cov_factor = None
             if K > 1:
                 with pyro.plate(f'K_{_id}', K-1):
@@ -307,6 +312,8 @@ class Factor(Model):
             cov_diag_scale = pyro.param(f'cov_diag_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
             cov_diag = cov_diag*torch.ones(D)
+            jitter = 1e-05
+            cov_diag = cov_diag + jitter
             # sample variables
             cov_factor = None
             if K > 1:
@@ -367,7 +374,9 @@ class ZeroMeanFactorARD(Model):
         cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_prior_loc_init)
         cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_prior_scale_init, constraint=constraints.positive)
         cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale).to_event(1))
-        cov_diag = cov_diag*torch.ones(D)
+        #cov_diag = cov_diag*torch.ones(D)
+        jitter = 1e-05
+        cov_diag = cov_diag + jitter
         
         lambdasquared = lambdasquared.squeeze()
         if lambdasquared.dim() == 1:

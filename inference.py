@@ -37,7 +37,7 @@ def inference(Model, training_data, test_data, config = None):
     Records telemetry including elbo loss, mean negative log likelihood on held out data, gradient norms and parameter history during training.
     If config includes telemetry from a previous inference run, inference continues from that run.
     If slope_significance is set to a value less than 1, training halts when the mean negative log likelihood converges.
-    Convergence is estimated by linear regression in a moving window of size convergence_window when p(slope=estimate|true_slope=0) < slope_significance.
+    Convergence is estimated by linear regression in a moving window of size convergence_window when p(slope = estimate|true_slope = 0) < slope_significance.
 
     Default config is 
     config = dict(
@@ -115,7 +115,7 @@ def inference(Model, training_data, test_data, config = None):
     #scheduler = pyro.optim.ExponentialLR({'optimizer': optim, 'optim_args': per_param_callable, 'gamma': config['learning_rate_decay']})
     
     max_plate_nesting = _guess_max_plate_nesting(model,(training_data,),{})
-    print("Guessed that model has max {} nested plates.".format(max_plate_nesting)) 
+    #print("Guessed that model has max {} nested plates.".format(max_plate_nesting)) 
     if 'Mixture' in model.__repr__():
         elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
     else:
@@ -153,6 +153,10 @@ def inference(Model, training_data, test_data, config = None):
             if config['track_params']:
                 telemetry['param_history'] = {k:torch.cat([telemetry['param_history'][k],v.unsqueeze(0).detach()],dim=0) for k,v in pyro.get_param_store().items()}
             i += 1
+#        except RuntimeError as e:
+#            print(e)
+#            print("There was a runtime error.")
+#            return telemetry
         except KeyboardInterrupt:
             print('\Interrupted by user after {} iterations.\n'.format(i))
             params = {k:v.detach() for k,v in pyro.get_param_store().items()}

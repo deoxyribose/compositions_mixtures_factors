@@ -55,7 +55,10 @@ inits = ['rng','pca','inc','ard']
 for K in Ks:
 	for restart in restarts:
 		for init in inits:
-			_id = '_'.join([str(K), str(restart), init])
+			if init == 'ard':
+				_id = '_'.join([str(restart), init])
+			else:
+				_id = '_'.join([str(K), str(restart), init])
 			# if the model is already trained or is in progress
 			if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
 				continue
@@ -64,8 +67,10 @@ for K in Ks:
 				continue
 			try:
 				train_job(dataset_filename, K, restart, init)
-			except RuntimeError:
+			except RuntimeError as e:
 				# mark failure of training job
 				fail_filename = _id + 'failed'
 				with open(fail_filename, 'wb') as f:
-					pickle.dump([], f)
+					f.writelines(e)
+					#pickle.dump([], f)
+					
