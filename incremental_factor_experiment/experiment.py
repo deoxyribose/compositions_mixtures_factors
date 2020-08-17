@@ -56,7 +56,8 @@ if D < 20:
 	Ks = range(1,D+1)
 else:
 	Ks = range(1,D,10)
-restarts = range(10)
+restarts = range(1)
+#restarts = range(10)
 inits = ['rng','pca','inc','ard']
 
 for K in Ks:
@@ -77,7 +78,8 @@ for K in Ks:
 			except RuntimeError as e:
 				# mark failure of training job
 				fail_filename = _id + 'failed'
-				with open(fail_filename, 'wb') as f:
+				with open(fail_filename, 'w') as f:
 					f.write(str(e))
+				train_job(dataset_filename, K, restart+10, init)
 					#pickle.dump([], f)
 					
