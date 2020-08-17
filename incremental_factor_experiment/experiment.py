@@ -78,6 +78,6 @@ for K in Ks:
 				# mark failure of training job
 				fail_filename = _id + 'failed'
 				with open(fail_filename, 'wb') as f:
-					f.writelines(e)
+					f.write(str(e))
 					#pickle.dump([], f)
 					
