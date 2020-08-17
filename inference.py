@@ -106,8 +106,16 @@ def inference(Model, training_data, test_data, config = None):
         Model.batch_size = config['batch_size']
         model(training_data)
         guide(training_data)
+        # record init in param_history
         telemetry['param_history'] = dict({k:v.unsqueeze(0) for k,v in pyro.get_param_store().items()})
+        # record MNLL at init
         i = 0
+        with torch.no_grad():
+            #mnll = compute_mnll(model, guide, test_data, n_samples=config['n_posterior_samples'])
+            telemetry['MNLL'].append(-Model.mnll(test_data, config['n_posterior_samples']))
+            print('\n')
+            print("NLL after {}/{} iterations is {}".format(i,config['n_iter'], telemetry['MNLL'][-1]))
+
     # Learning rate schedulers
     # Haven't found a way to get and set its state for checkpointing
     #optim = torch.optim.Adam

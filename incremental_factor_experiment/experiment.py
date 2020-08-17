@@ -30,15 +30,19 @@ from generate_dataset import generate_dataset
 from train_job import *
 
 # test
-#D = 2
-#K = 1
-#N = 100
+D = 2
+K = 1
+N = 100
 
 # dataset settings
-D = 10
-K = 4
-N = 5000
+#D = 10
+#K = 4
+#N = 5000
 seed = 45
+
+D = 110
+K = 80
+N = 5000
 
 #D = 500
 #K = 160
@@ -48,7 +52,10 @@ seed = 45
 dataset_filename =generate_dataset(D, N, K, seed)
 
 # define experiment
-Ks = range(1,D+1)
+if D < 20:
+	Ks = range(1,D+1)
+else:
+	Ks = range(1,D,10)
 restarts = range(10)
 inits = ['rng','pca','inc','ard']
 
