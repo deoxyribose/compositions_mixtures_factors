@@ -54,8 +54,8 @@ def get_best_teacher(K, restart):
 		models = []
 		average_MNLL_at_convergences = []
 		# iterate through all restarts of previous model
-		for f in previous_K_files:
-		    with open(f, 'rb') as f:
+		for file in previous_K_files:
+		    with open(file, 'rb') as f:
 		        model, telemetry = pickle.load(f)
 				# find average MNLL in convergence window
 		        average_MNLL_at_convergence = sum(telemetry['MNLL'][-config['convergence_window']:])/config['convergence_window']
@@ -66,7 +66,7 @@ def get_best_teacher(K, restart):
 		return models[best_idx], best_idx
 	else:
 		previous_K_file = '_'.join([str(K), str(restart), 'inc']) + '.p'
-		with open(f, 'rb') as f:
+		with open(previous_K_file, 'rb') as f:
 		    model, telemetry = pickle.load(f)
 		return model
 
