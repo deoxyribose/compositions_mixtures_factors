@@ -73,13 +73,15 @@ for K in Ks:
 			# the first K in incremental initialization is the same as random initialization
 			if init == 'inc' and K == 1:
 				continue
+			current_K_index = Ks.index(K)
+			previous_K = Ks[current_K_index-1]
 			try:
-				train_job(dataset_filename, K, restart, init)
+				train_job(dataset_filename, K, previous_K, restart, init)
 			except RuntimeError as e:
 				# mark failure of training job
 				fail_filename = _id + 'failed'
 				with open(fail_filename, 'w') as f:
 					f.write(str(e))
-				train_job(dataset_filename, K, restart+10, init)
+				train_job(dataset_filename, K, previous_K, restart+10, init)
 					#pickle.dump([], f)
 					

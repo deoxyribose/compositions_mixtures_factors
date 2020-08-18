@@ -71,7 +71,7 @@ def get_best_teacher(K, restart):
 		return model
 
 
-def train_job(dataset_filename, K, restart, init):
+def train_job(dataset_filename, K, previous_K, restart, init):
 
 	# load data
 	with open(dataset_filename, 'rb') as f:
@@ -93,7 +93,7 @@ def train_job(dataset_filename, K, restart, init):
 	elif init == 'inc':
 		model = ZeroMeanFactor(data, K, config['batch_size'], _id)
 		if K > 1:
-			teacher, teacher_idx = get_best_teacher(K-1, restart)
+			teacher, teacher_idx = get_best_teacher(previous_K, restart)
 			incremental_init(model, teacher)
 	elif init == 'ard':
 		_id = '_'.join([str(restart), init])
