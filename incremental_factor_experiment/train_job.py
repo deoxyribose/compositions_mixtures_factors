@@ -68,7 +68,7 @@ def get_best_teacher(K, restart):
 		previous_K_file = '_'.join([str(K), str(restart), 'inc']) + '.p'
 		with open(previous_K_file, 'rb') as f:
 		    model, telemetry = pickle.load(f)
-		return model
+		return model, restart
 
 
 def train_job(dataset_filename, K, previous_K, restart, init):

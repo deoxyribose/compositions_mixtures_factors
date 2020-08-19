@@ -60,28 +60,67 @@ restarts = range(1)
 #restarts = range(10)
 inits = ['rng','pca','inc','ard']
 
+all_jobs = []
+
+# make list of all jobs to be completed
 for K in Ks:
 	for restart in restarts:
 		for init in inits:
-			if init == 'ard':
-				_id = '_'.join([str(restart), init])
-			else:
-				_id = '_'.join([str(K), str(restart), init])
-			# if the model is already trained or is in progress
-			if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
-				continue
 			# the first K in incremental initialization is the same as random initialization
 			if init == 'inc' and K == 1:
 				continue
 			current_K_index = Ks.index(K)
 			previous_K = Ks[current_K_index-1]
-			try:
-				train_job(dataset_filename, K, previous_K, restart, init)
-			except RuntimeError as e:
-				# mark failure of training job
-				fail_filename = _id + 'failed'
-				with open(fail_filename, 'w') as f:
-					f.write(str(e))
-				train_job(dataset_filename, K, previous_K, restart+10, init)
-					#pickle.dump([], f)
-					
+			all_jobs.append((K, previous_K, restart, init))
+
+# this loop ranks remaining jobs based on the state of the folder
+# by priority and trains the next one
+while jobs:
+	# we start with all jobs that need to be done, in case some jobs were started but failed
+	jobs = all_jobs
+	# prune those jobs that have been completed, or are being worked on
+	for job in jobs:
+		K, previous_K, restart, init = job
+		if init == 'ard':
+			_id = '_'.join([str(restart), init])
+		else:
+			_id = '_'.join([str(K), str(restart), init])
+		if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
+			jobs.remove(job)
+	# if there are jobs left rank them
+	if not jobs:
+		print("All jobs are completed.")
+		sys.exit()
+
+	# first be seed, then by K
+	jobs = sorted(jobs, key=lambda tup: (tup[2],tup[0]))
+	
+	# highest priority to rng K=1 for all seeds
+	for i,job in enumerate(jobs):
+    	jobs[i] = job + ((job[-1] == 'rng' and job[0] == 1),)
+    jobs = sorted(jobs, key=lambda tup: tup[-1], reverse=True)
+	
+	top_priority = 0
+	# train the top priority job
+	# unless it's an inc job and its teacher doesn't exist yet
+	inc_and_teacher_not_present = True
+	while inc_and_teacher_not_present:
+		top_priority_job = jobs[top_priority][:-1]
+		if top_priority_job[-1] == 'inc':
+			K, previous_K, restart, init = top_priority_job
+			teacher_id = '_'.join([str(K), str(restart), init])
+			teacher_present = os.path.exists(teacher_id + '.p')
+			if not teacher_present:
+				top_priority += 1
+			else:
+				inc_and_teacher_not_present = False
+		else:
+			inc_and_teacher_not_present = False
+	try:
+		print(f'Training {top_priority_job[-1]} init with {top_priority_job[0]} factors for seed {top_priority_job[2]}.')
+		train_job(dataset_filename, *top_priority_job)
+	except Exception as e:
+		# mark failure of training job
+		fail_filename = _id + 'failed'
+		with open(fail_filename, 'w') as f:
+			f.write(str(e))
