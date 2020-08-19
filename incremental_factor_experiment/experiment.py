@@ -56,7 +56,7 @@ if D < 20:
     Ks = range(1,D+1)
 else:
     Ks = range(1,D,10)
-restarts = range(1)
+restarts = range(10)
 #restarts = range(10)
 inits = ['rng','pca','inc','ard']
 
