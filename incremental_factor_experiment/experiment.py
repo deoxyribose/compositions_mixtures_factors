@@ -79,6 +79,7 @@ for K in Ks:
 jobs = all_jobs
 
 while jobs:
+    print(jobs)
     # prune those jobs that have been completed, or are being worked on
     for job in jobs:
         K, previous_K, restart, init = job
@@ -88,6 +89,7 @@ while jobs:
             _id = '_'.join([str(K), str(restart), init])
         if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
             jobs.remove(job)
+    print(jobs)
     # if there are jobs left rank them
     if not jobs:
         print("All jobs are completed.")
