@@ -75,9 +75,10 @@ for K in Ks:
 
 # this loop ranks remaining jobs based on the state of the folder
 # by priority and trains the next one
+# we start with all jobs that need to be done, in case some jobs were started but failed
+jobs = all_jobs
+
 while jobs:
-    # we start with all jobs that need to be done, in case some jobs were started but failed
-    jobs = all_jobs
     # prune those jobs that have been completed, or are being worked on
     for job in jobs:
         K, previous_K, restart, init = job
