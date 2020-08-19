@@ -86,8 +86,6 @@ while jobs:
             _id = '_'.join([str(restart), init])
         else:
             _id = '_'.join([str(K), str(restart), init])
-        print(job)
-        print(_id +'.p')
         if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
             jobs.remove(job)
     # if there are jobs left rank them
@@ -102,6 +100,8 @@ while jobs:
     for i,job in enumerate(jobs):
         jobs[i] = job + ((job[-1] == 'rng' and job[0] == 1),)
     jobs = sorted(jobs, key=lambda tup: tup[-1], reverse=True)
+
+    print(jobs)
     
     top_priority = 0
     # train the top priority job
