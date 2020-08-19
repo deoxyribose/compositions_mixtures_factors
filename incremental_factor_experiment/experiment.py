@@ -86,6 +86,8 @@ while jobs:
             _id = '_'.join([str(restart), init])
         else:
             _id = '_'.join([str(K), str(restart), init])
+        print(job)
+        print(_id +'.p')
         if os.path.exists(_id + '.p') or os.path.exists(_id + 'started'):
             jobs.remove(job)
     # if there are jobs left rank them
