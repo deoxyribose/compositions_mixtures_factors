@@ -79,6 +79,7 @@ for K in Ks:
 jobs = all_jobs
 
 while jobs:
+    jobs = all_jobs
     # prune those jobs that have been completed, or are being worked on
     pruned_jobs = jobs.copy()
     for job in jobs:
@@ -111,7 +112,7 @@ while jobs:
         top_priority_job = jobs[top_priority][:-1]
         if top_priority_job[-1] == 'inc':
             K, previous_K, restart, init = top_priority_job
-            teacher_id = '_'.join([str(K), str(restart), init])
+            teacher_id = '_'.join([str(previous_K), str(restart), init])
             teacher_present = os.path.exists(teacher_id + '.p')
             if not teacher_present:
                 top_priority += 1
