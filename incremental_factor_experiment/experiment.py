@@ -103,8 +103,6 @@ while jobs:
         jobs[i] = job + ((job[-1] == 'rng' and job[0] == 1),)
     jobs = sorted(jobs, key=lambda tup: tup[-1], reverse=True)
 
-    print(jobs)
-    
     top_priority = 0
     # train the top priority job
     # unless it's an inc job and its teacher doesn't exist yet
