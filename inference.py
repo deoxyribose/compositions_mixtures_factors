@@ -124,8 +124,8 @@ def inference(Model, training_data, test_data, config = None):
     
     max_plate_nesting = _guess_max_plate_nesting(model,(training_data,),{})
     #print("Guessed that model has max {} nested plates.".format(max_plate_nesting)) 
-    if 'Mixture' in model.__repr__():
-        elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
+    if 'mixture' in model.__repr__():
+        elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting, num_particles=config['n_elbo_particles'], vectorize_particles=True)
     else:
         elbo = Trace_ELBO(max_plate_nesting=max_plate_nesting, num_particles=config['n_elbo_particles'], vectorize_particles=True)
     #svi = SVI(model, guide, scheduler, loss=elbo)

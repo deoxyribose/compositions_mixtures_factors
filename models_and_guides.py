@@ -26,6 +26,9 @@ class Model():
     def __init__(self, X, batch_size, _id):
         self.X = X
         self.N, self.D = self.X.shape
+        # to avoid naming conflicts, make sure there aren't parameters in the param store
+        # that end with the same _id
+        assert not any([key.endswith('_'+_id) for key in pyro.get_param_store().keys()])
         self._id = _id
         self.batch_size = batch_size
 
@@ -33,7 +36,7 @@ class Model():
         return get_random_init(self.param_shapes_and_support)
 
     def model(self, X):
-        raise NotImplementedError
+        return X
         
     def unconditioned_model(self, *args):
         return pyro.poutine.uncondition(self.model)(*args)
@@ -48,6 +51,8 @@ class Model():
 
         WARNING: Must only be called inside a with torch.no_grad():, 
         # otherwise pytorch will try to diff through this
+
+        WARNING: Guide gets parameters from Pyro's param store. 
         '''
         original_batch_size = self.batch_size
         self.batch_size = 1
@@ -69,100 +74,12 @@ class Model():
         self.posterior_predictive_samples = self.posterior_samples['obs'].squeeze().detach()
         self.batch_size = original_batch_size
 
-#
-#class ZeroMeanFactor(Model):
-#    def __init__(self, X, K, batch_size, _id):
-#        super(ZeroMeanFactor, self).__init__(X, batch_size, _id)
-#        self.K = K
-#        self.param_shapes_and_support = self.get_param_shapes_and_support()
-#        self.param_init = self.initialize_parameters()
-#
-#    def get_param_shapes_and_support(self, _id = None):
-#        if _id == None:
-#            _id = self._id
-#        return {f'cov_diag_prior_loc_init_{_id}': ((self.D,), constraints.real),
-#                f'cov_diag_prior_scale_init_{_id}': ((self.D,), constraints.positive),
-#                f'cov_factor_prior_loc_init_{_id}': ((self.K, self.D), constraints.real),
-#                f'cov_factor_prior_scale_init_{_id}': ((self.K, self.D), constraints.positive),
-#                f'cov_diag_loc_init_{_id}': ((self.D,), constraints.real),
-#                f'cov_diag_scale_init_{_id}': ((self.D,), constraints.positive),
-#                f'cov_factor_loc_init_{_id}': ((self.K, self.D), constraints.real),
-#                f'cov_factor_scale_init_{_id}': ((self.K, self.D), constraints.positive)}
-#
-#    def model(self, X):
-#        _id = self._id
-#        K = self.K
-#        #N, D = self.X.shape
-#        N, D = X.shape
-#        cov_diag_locinit = self.param_init[f'cov_diag_prior_loc_init_{_id}']
-#        cov_diag_scale_init = self.param_init[f'cov_diag_prior_scale_init_{_id}']
-#        cov_factor_loc_init = self.param_init[f'cov_factor_prior_loc_init_{_id}']
-#        cov_factor_scale_init = self.param_init[f'cov_factor_prior_scale_init_{_id}']
-#        with pyro.plate(f'D_{_id}', D):
-#            cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_locinit)
-#            cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
-#            cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
-#            cov_factor = None
-#            if K > 1:
-#                with pyro.plate(f'K_{_id}', K-1):
-#                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[:K-1,:])
-#                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
-#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
-#                cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[-1,:])
-#                cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
-#                cov_factor_new = pyro.sample(f'cov_factor_new_{_id}', dist.Normal(cov_factor_loc[-1,:],cov_factor_scale[-1,:]))
-#                #cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
-#                if cov_factor_new.dim() == cov_factor.dim():
-#                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
-#                    #cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
-#                else:
-#                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
-#            else:
-#                with pyro.plate(f'K_{_id}', K):
-#                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init)
-#                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
-#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
-#            cov_factor = cov_factor.transpose(-2,-1)
-#            loc = torch.zeros(D)
-#        with pyro.plate(f'N_{_id}', size=N, subsample_size=self.batch_size) as ind:
-#            X = pyro.sample('obs', dist.LowRankMultivariateNormal(loc, cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
-#        return X
-    #
-#    def guide(self, X):
-#        _id = self._id
-#        N, D = X.shape
-#        K = self.K
-#        cov_diag_loc_init = self.param_init[f'cov_diag_loc_init_{_id}']
-#        cov_diag_scale_init = self.param_init[f'cov_diag_scale_init_{_id}']
-#        cov_factor_loc_init = self.param_init[f'cov_factor_loc_init_{_id}']
-#        cov_factor_scale_init = self.param_init[f'cov_factor_scale_init_{_id}']
-#        with pyro.plate(f'D_{_id}', D, dim=-1):
-#            cov_diag_loc = pyro.param(f'cov_diag_loc_{_id}', cov_diag_loc_init)
-#            cov_diag_scale = pyro.param(f'cov_diag_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
-#            cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
-#            cov_diag = cov_diag*torch.ones(D)
-#            # sample variables
-#            cov_factor = None
-#            if K > 1:
-#                with pyro.plate(f'K_{_id}', K-1, dim=-2):
-#                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init[:K-1,:])
-#                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
-#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
-#                cov_factor_new_loc = pyro.param(f'cov_factor_new_loc_{_id}', cov_factor_loc_init[-1,:])
-#                cov_factor_new_scale = pyro.param(f'cov_factor_new_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
-#                cov_factor_new = pyro.sample(f'cov_factor_new_{_id}', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
-#                # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
-#                if cov_factor_new.dim() == cov_factor.dim():
-#                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
-#                else:
-#                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
-#            else:
-#                with pyro.plate(f'K_{_id}', K):
-#                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init)
-#                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
-#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
-#            cov_factor = cov_factor.transpose(-2,-1)
-#        return cov_factor, cov_diag
+
+
+#############
+#############
+
+
 
 class ZeroMeanFactor(Model):
     def __init__(self, X, K, batch_size, _id):
@@ -188,12 +105,12 @@ class ZeroMeanFactor(Model):
         K = self.K
         #N, D = self.X.shape
         N, D = X.shape
-        cov_diag_locinit = self.param_init[f'cov_diag_prior_loc_init_{_id}']
+        cov_diag_loc_init = self.param_init[f'cov_diag_prior_loc_init_{_id}']
         cov_diag_scale_init = self.param_init[f'cov_diag_prior_scale_init_{_id}']
         cov_factor_loc_init = self.param_init[f'cov_factor_prior_loc_init_{_id}']
         cov_factor_scale_init = self.param_init[f'cov_factor_prior_scale_init_{_id}']
         with pyro.plate(f'D_{_id}', D):
-            cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_locinit)
+            cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_loc_init)
             cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
             cov_diag = cov_diag + jitter
@@ -227,6 +144,14 @@ class ZeroMeanFactor(Model):
                 cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
             cov_factor = cov_factor.transpose(-2,-1)
         return cov_factor, cov_diag
+
+
+
+
+#############
+#############
+
+
 
 class Factor(Model):
     def __init__(self, X, K, batch_size, _id):
@@ -269,25 +194,10 @@ class Factor(Model):
             cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
             cov_diag = cov_diag + jitter
             cov_factor = None
-            if K > 1:
-                with pyro.plate(f'K_{_id}', K-1):
-                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[:K-1,:])
-                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
-                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
-                cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[-1,:])
-                cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
-                cov_factor_new = pyro.sample(f'cov_factor_new_{_id}', dist.Normal(cov_factor_loc_init[-1,:],cov_factor_scale_init[-1,:]))
-                #cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
-                if cov_factor_new.dim() == cov_factor.dim():
-                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
-                    #cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
-                else:
-                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
-            else:
-                with pyro.plate(f'K_{_id}', K):
-                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init)
-                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
-                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
+            with pyro.plate(f'K_{_id}', K):
+                cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init)
+                cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
+                cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
             cov_factor = cov_factor.transpose(-2,-1)
         with pyro.plate(f'N_{_id}', size=N, subsample_size=self.batch_size) as ind:
             X = pyro.sample('obs', dist.LowRankMultivariateNormal(loc, cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
@@ -314,27 +224,21 @@ class Factor(Model):
             cov_diag = cov_diag*torch.ones(D)
             cov_diag = cov_diag + jitter
             # sample variables
-            cov_factor = None
-            if K > 1:
-                with pyro.plate(f'K_{_id}', K-1, dim=-2):
-                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init[:K-1,:])
-                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
-                    cov_factor = pyro.sample(f'cov_factor{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
-                cov_factor_new_loc = pyro.param(f'cov_factor_new_loc_{_id}', cov_factor_loc_init[-1,:])
-                cov_factor_new_scale = pyro.param(f'cov_factor_new_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
-                cov_factor_new = pyro.sample(f'cov_factor_new{_id}', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
-                # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
-                if cov_factor_new.dim() == cov_factor.dim():
-                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
-                else:
-                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
-            else:
-                with pyro.plate(f'K_{_id}', K):
-                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init)
-                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
-                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
+            with pyro.plate(f'K_{_id}', K):
+                cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init)
+                cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
+                cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
             cov_factor = cov_factor.transpose(-2,-1)
-        return cov_factor, cov_diag
+        return loc, cov_factor, cov_diag
+
+
+
+
+#############
+#############
+
+
+
 
 class ZeroMeanFactorARD(Model):
     def __init__(self, X, batch_size, _id):
@@ -822,3 +726,99 @@ def scaledSphericalMixtureGuide(X, batch_size, variational_parameter_initializat
         cov_scaling_scale = pyro.param('cov_scaling_scale', covscalingscale, constraint=constraints.positive)
         cov_scaling = pyro.sample('cov_scaling', dist.LogNormal(covscalingloc, covscalingscale))
     return component_logits, cov_diag, cov_scaling, locs
+
+
+#
+#class ZeroMeanFactor(Model):
+#    def __init__(self, X, K, batch_size, _id):
+#        super(ZeroMeanFactor, self).__init__(X, batch_size, _id)
+#        self.K = K
+#        self.param_shapes_and_support = self.get_param_shapes_and_support()
+#        self.param_init = self.initialize_parameters()
+#
+#    def get_param_shapes_and_support(self, _id = None):
+#        if _id == None:
+#            _id = self._id
+#        return {f'cov_diag_prior_loc_init_{_id}': ((self.D,), constraints.real),
+#                f'cov_diag_prior_scale_init_{_id}': ((self.D,), constraints.positive),
+#                f'cov_factor_prior_loc_init_{_id}': ((self.K, self.D), constraints.real),
+#                f'cov_factor_prior_scale_init_{_id}': ((self.K, self.D), constraints.positive),
+#                f'cov_diag_loc_init_{_id}': ((self.D,), constraints.real),
+#                f'cov_diag_scale_init_{_id}': ((self.D,), constraints.positive),
+#                f'cov_factor_loc_init_{_id}': ((self.K, self.D), constraints.real),
+#                f'cov_factor_scale_init_{_id}': ((self.K, self.D), constraints.positive)}
+#
+#    def model(self, X):
+#        _id = self._id
+#        K = self.K
+#        #N, D = self.X.shape
+#        N, D = X.shape
+#        cov_diag_loc_init = self.param_init[f'cov_diag_prior_loc_init_{_id}']
+#        cov_diag_scale_init = self.param_init[f'cov_diag_prior_scale_init_{_id}']
+#        cov_factor_loc_init = self.param_init[f'cov_factor_prior_loc_init_{_id}']
+#        cov_factor_scale_init = self.param_init[f'cov_factor_prior_scale_init_{_id}']
+#        with pyro.plate(f'D_{_id}', D):
+#            cov_diag_loc = pyro.param(f'cov_diag_prior_loc_{_id}', cov_diag_loc_init)
+#            cov_diag_scale = pyro.param(f'cov_diag_prior_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
+#            cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
+#            cov_factor = None
+#            if K > 1:
+#                with pyro.plate(f'K_{_id}', K-1):
+#                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[:K-1,:])
+#                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
+#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
+#                cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init[-1,:])
+#                cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
+#                cov_factor_new = pyro.sample(f'cov_factor_new_{_id}', dist.Normal(cov_factor_loc[-1,:],cov_factor_scale[-1,:]))
+#                #cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=0)])
+#                if cov_factor_new.dim() == cov_factor.dim():
+#                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
+#                    #cov_factor = torch.cat([cov_factor, cov_factor_new], dim=1)
+#                else:
+#                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
+#            else:
+#                with pyro.plate(f'K_{_id}', K):
+#                    cov_factor_loc = pyro.param(f'cov_factor_prior_loc_{_id}', cov_factor_loc_init)
+#                    cov_factor_scale = pyro.param(f'cov_factor_prior_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
+#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc,cov_factor_scale))
+#            cov_factor = cov_factor.transpose(-2,-1)
+#            loc = torch.zeros(D)
+#        with pyro.plate(f'N_{_id}', size=N, subsample_size=self.batch_size) as ind:
+#            X = pyro.sample('obs', dist.LowRankMultivariateNormal(loc, cov_factor=cov_factor, cov_diag=cov_diag), obs=X.index_select(0, ind))
+#        return X
+    #
+#    def guide(self, X):
+#        _id = self._id
+#        N, D = X.shape
+#        K = self.K
+#        cov_diag_loc_init = self.param_init[f'cov_diag_loc_init_{_id}']
+#        cov_diag_scale_init = self.param_init[f'cov_diag_scale_init_{_id}']
+#        cov_factor_loc_init = self.param_init[f'cov_factor_loc_init_{_id}']
+#        cov_factor_scale_init = self.param_init[f'cov_factor_scale_init_{_id}']
+#        with pyro.plate(f'D_{_id}', D, dim=-1):
+#            cov_diag_loc = pyro.param(f'cov_diag_loc_{_id}', cov_diag_loc_init)
+#            cov_diag_scale = pyro.param(f'cov_diag_scale_{_id}', cov_diag_scale_init, constraint=constraints.positive)
+#            cov_diag = pyro.sample(f'cov_diag_{_id}', dist.LogNormal(cov_diag_loc, cov_diag_scale))
+#            cov_diag = cov_diag*torch.ones(D)
+#            # sample variables
+#            cov_factor = None
+#            if K > 1:
+#                with pyro.plate(f'K_{_id}', K-1, dim=-2):
+#                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init[:K-1,:])
+#                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init[:K-1,:], constraint=constraints.positive)
+#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
+#                cov_factor_new_loc = pyro.param(f'cov_factor_new_loc_{_id}', cov_factor_loc_init[-1,:])
+#                cov_factor_new_scale = pyro.param(f'cov_factor_new_scale_{_id}', cov_factor_scale_init[-1,:], constraint=constraints.positive)
+#                cov_factor_new = pyro.sample(f'cov_factor_new_{_id}', dist.Normal(cov_factor_new_loc,cov_factor_new_scale))
+#                # when using pyro.infer.Predictive, cov_factor_new is somehow sampled as 2-d tensors instead of 1-d
+#                if cov_factor_new.dim() == cov_factor.dim():
+#                    cov_factor = torch.cat([cov_factor, cov_factor_new], dim=-2)
+#                else:
+#                    cov_factor = torch.cat([cov_factor, torch.unsqueeze(cov_factor_new, dim=-2)], dim=-2)
+#            else:
+#                with pyro.plate(f'K_{_id}', K):
+#                    cov_factor_loc = pyro.param(f'cov_factor_loc_{_id}', cov_factor_loc_init)
+#                    cov_factor_scale = pyro.param(f'cov_factor_scale_{_id}', cov_factor_scale_init, constraint=constraints.positive)
+#                    cov_factor = pyro.sample(f'cov_factor_{_id}', dist.Normal(cov_factor_loc, cov_factor_scale))
+#            cov_factor = cov_factor.transpose(-2,-1)
+#        return cov_factor, cov_diag

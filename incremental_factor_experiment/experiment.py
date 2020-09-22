@@ -56,8 +56,8 @@ if D < 20:
     Ks = range(1,D+1)
 else:
     Ks = range(1,D,10)
-restarts = range(10)
 #restarts = range(10)
+restarts = range(10,20)
 inits = ['rng','pca','inc','ard']
 
 all_jobs = []
@@ -96,7 +96,7 @@ while jobs:
         print("All jobs are completed.")
         sys.exit()
 
-    # first be seed, then by K
+    # rank first by seed, then by K
     jobs = sorted(jobs, key=lambda tup: (tup[2],tup[0]))
     
     # highest priority to rng K=1 for all seeds

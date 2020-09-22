@@ -27,7 +27,7 @@ import re
 
 # define inference config
 config = dict(
-    n_iter = 2000,
+    n_iter = 6000,
     learning_rate = 0.1,
     beta1 = 0.9,
     beta2 = 0.999,
