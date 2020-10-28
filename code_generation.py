@@ -3,6 +3,8 @@ from model_operators import *
 from models_and_guides import DAGModel
 
 def remove_nodes_keep_edges(G, nodes):
+    if not type(nodes) is list: 
+        nodes = [nodes]
     for node in nodes:
         # connect orphaned children to grandparents
         parents = [u for u,v in G.in_edges(node)]
@@ -42,6 +44,26 @@ def make_plate_graph(DAG):
     plate_graph.remove_edges_from(plate_graph.selfloop_edges())
     return plate_graph
 
+def nodes_in_dependency_order(DAG):
+    # figures out the dependency order in DAG
+    # by constructing a new graph with added edges
+    # that represent plate dependency
+    plate_graph = make_plate_graph(DAG)
+    dependency_graph = DAG.copy()
+    for node in dependency_graph.nodes:
+        if 'plates' in dependency_graph.nodes[node]:
+            plate = ''.join(dependency_graph.nodes[node]['plates'])
+            plate_config = [node for node in plate_graph if node.startswith(plate)]
+            if any(plate_config):
+                downstream_plate = [v for u,v in plate_graph.out_edges(plate_config)]
+                if not downstream_plate:
+                    continue
+                else:
+                    downstream_plate = downstream_plate[0]
+                nodes_on_downstream_plates = [n for n in dependency_graph if 'plates' in dependency_graph.nodes[n] and (downstream_plate).startswith(''.join(dependency_graph.nodes[n]['plates']))]
+                dependency_graph.add_edges_from([(node,other_node) for other_node in nodes_on_downstream_plates])
+    return list(nx.topological_sort(dependency_graph))
+
 def construct_initalization(graph, node):
     if graph.nodes[node]['type'] == 'param':
         return Assign(targets=[Name(id=node+'_init')],
@@ -57,14 +79,17 @@ def construct_param(graph, node):
         constraint = []
     else:
         constraint = [keyword(arg='constraint', value=Attribute(value=Name(id='constraints'), attr=graph.nodes[node]['constraint']))]
-    return Assign(targets=[Name(id=node)],
+    # add both initialization and parameter itself
+    # retuns them as a list
+    return [construct_initalization(graph, node),
+        Assign(targets=[Name(id=node)],
             value=Call(func=Attribute(value=Name(id='pyro'), attr='param'),
                 args=[
                     JoinedStr(
                         values=[Str(s=node+'_'),
                             FormattedValue(value=Name(id='_id'), conversion=-1, format_spec=None)]),
                     Name(id=node+'_init')],
-                keywords=constraint))
+                keywords=constraint))]
 
 def construct_constant(graph, node):
     return Assign(targets=[Name(id=node)], value=Num(n=graph.nodes[node]['value']))
@@ -108,17 +133,38 @@ def construct_sample(graph, node):
 def construct_function(graph, node):
     # assuming function is a torch method, s.t. calling it looks like torch.method(arg1,arg2,...,argN)
     # get string repr of function
-    function = graph.nodes[node]['function'].__name__
-    args = []
-    for edge in graph.in_edges(node):
-        assert graph.edges[edge]['type'] == 'arg'
-        args.append(Name(id=edge[0]))
+
+    parents = list(graph.in_edges(node))
+    n_parents = len(parents)
+
+    # construct call signature
     if 'args' in graph.nodes[node]:
-        for arg in graph.nodes[node]['args']:
+        # convert args into list, in case it was a tuple
+        graph.nodes[node]['args'] = list(graph.nodes[node]['args'])
+        # if the args list doesn't demarcate where parents should go, put them in the front
+        if graph.nodes[node]['args'].count('p') + graph.nodes[node]['args'].count('t') == 0:
+            graph.nodes[node]['args'] = ['p']*n_parents + graph.nodes[node]['args']
+        else:
+            assert graph.nodes[node]['args'].count('p') + graph.nodes[node]['args'].count('t') == n_parents
+    else:
+        graph.nodes[node]['args'] = ['p']*n_parents
+
+    # construct args list with AST objects from call signature
+    args = []
+    for arg in graph.nodes[node]['args']:
+        if arg == 'p':
+            e = parents.pop(0)
+            args.append(Name(id=e[0]))
+        elif arg == 't':
+            e = parents.pop(0)
+            args.append(Attribute(value=Name(id=e[0]), attr='T'))
+        else:
             assert isinstance(arg, ast.AST), f"arg attribute {arg} in node {node} is not an AST object."
             args.append(arg)
+
     # wrap function call in a deterministic sample site
     if graph.nodes[node]['type'] == 'deterministic':
+        function = graph.nodes[node]['function'].__name__
         return Assign(targets=[Name(id=node)],
             value=Call(func=Attribute(value=Name(id='pyro'), attr='deterministic'),
                 args=[
@@ -131,10 +177,19 @@ def construct_function(graph, node):
                 keywords=[]))
     # just write function call as is
     elif graph.nodes[node]['type'] == 'function':
+        function = graph.nodes[node]['function'].__name__
         return Assign(targets=[Name(id=node)],
             value=Call(func=Attribute(value=Name(id='torch'), attr=function),
                         args=args,
                         keywords=[]))
+    # if it's a suffix function, assume the first arg is the tensor, and the rest are args
+    elif graph.nodes[node]['type'] == 'suffix':
+        function = graph.nodes[node]['function']
+        if function == 'T':
+            return Assign(targets=[Name(id=node)],value=Attribute(value=Name(id=args[0]), attr=function))
+        else:
+            return Assign(targets=[Name(id=node)],
+                value=Call(func=Attribute(value=Name(id=args[0]), attr=function), args=args[1:], keywords=[]))
 
 def construct_plate(graph, plate):
     if plate == 'N':
@@ -163,6 +218,28 @@ def insert_function_into_class(class_source, function_code, function_def_str, fu
     function_code = function_code.replace('\n    ','\n        ')
     return class_source.replace(class_source[start_idx:end_idx], function_code)
 
+def add_to_or_create_plate(DAG, tree, construct, plate, pos, to_be_created = '', created_plates = []):
+    """
+    Try adding construct to plate configuration if it exists, otherwise recursively create it
+    """
+    # if no existing plate configs start with the plate we're adding to, recurse
+    if not any([created_plate.startswith(plate) for created_plate in created_plates]):
+        if len(plate) == 1:
+            AddToFunctionBody(construct_plate(DAG, plate), pos=pos).visit(tree)
+            created_plates.append(plate)
+            return add_to_or_create_plate(DAG, tree, construct,plate,pos,to_be_created,created_plates)
+        return add_to_or_create_plate(DAG, tree, construct,plate[:-1],pos,plate[-1]+to_be_created, created_plates)
+    else:
+        # the whole config has been created, add the node and return
+        if to_be_created == '':
+            AddToPlate(plate, construct, pos=pos).visit(tree)
+            return created_plates
+        # create the next plate in the config, and keep recursing
+        else:
+            AddToPlate(plate, construct_plate(DAG, plate+to_be_created[0]), pos=pos).visit(tree)
+            created_plates = [created_plate+to_be_created[0] if created_plate == plate else created_plate for created_plate in created_plates]
+            return add_to_or_create_plate(DAG, tree, construct,plate+to_be_created[0],pos,to_be_created[1:], created_plates)
+
 def generate_model(DAG, dims, root_node_suffix = None):
     # rename root nodes
     if root_node_suffix != None:
@@ -176,51 +253,45 @@ def generate_model(DAG, dims, root_node_suffix = None):
     # figure out which plates to create and in what order
     plate_graph = make_plate_graph(DAG)
     new_plates = list(nx.topological_sort(plate_graph))
-    # create plates
-    for plate_config in new_plates:
-        prev_plate = plate_config[0]
-        AddToFunctionBody(construct_plate(DAG, prev_plate), pos=-1).visit(tree)
-        while plate_config[1:]:
-            plate_config = plate_config[1:]
-            plate = plate_config[0]
-            AddToPlate(prev_plate, construct_plate(DAG, prev_plate+plate)).visit(tree)
-            prev_plate = prev_plate+plate
+    created_plates = []
     # create all nodes in DAG
-    for node in nx.topological_sort(DAG):
-        # if it's a root node, add it top level in the function
-        if DAG.in_degree[node] == 0:
-            # edit model tree
-            if DAG.nodes[node]['type'] == 'param':
-                AddToFunctionBody(construct_param(DAG, node), pos=0).visit(tree)
-                AddToFunctionBody(construct_initalization(DAG, node), pos=0).visit(tree)
-            elif DAG.nodes[node]['type'] == 'function':
-                AddToFunctionBody(construct_function(DAG, node), pos=0).visit(tree)
-            elif DAG.nodes[node]['type'] == 'const':
-                AddToFunctionBody(construct_constant(DAG, node), pos=0).visit(tree)
-        # if not, check for plating, and maintain dependency order unplated nodes
+    for node in nodes_in_dependency_order(DAG):
+        # determine type, plate
+        constructor = {'param':construct_param,
+                       'function':construct_function,
+                       'suffix':construct_function,
+                       'const':construct_constant,
+                       'latent':construct_sample,
+                       'obs':construct_sample
+        }
+        construct = constructor[DAG.nodes[node]['type']](DAG, node)
+
+        
+        # we want to avoid constructing nodes after their children
+        # this can happen when a node and its child are on different plates
+        # and the child's plate already exists
+        pos = -1
+        if any(['plates' in DAG.nodes[v] for u,v in DAG.out_edges(node)]):
+            plates_of_children = [DAG.nodes[v]['plates'] for u,v in DAG.out_edges(node) if 'plates' in DAG.nodes[v]]
+            # we're only checking for the first child's plate
+            # ideally we should check all children's plates and pick the plate that comes first
+            first_child_plate = ''.join(plates_of_children[0])
+            # if node and its child are on different plates, and both plates exists
+            node_plate = ''.join(DAG.nodes[node]['plates']) if 'plates' in DAG.nodes[node] else ''
+            if first_child_plate != node_plate and all([any([plate_config.startswith(plate) for plate_config in created_plates]) for plate in [first_child_plate, node_plate]]):
+                # find index of children's plate
+                index_finder = GetPlateIndex(first_child_plate)
+                index_finder.visit(tree)
+                pos = index_finder.pos
+
+        if 'plates' in DAG.nodes[node]:
+            plate = ''.join(DAG.nodes[node]['plates'])
+            created_plates = add_to_or_create_plate(DAG, tree, construct, plate, pos, created_plates = created_plates)
         else:
-            if 'distribution' in DAG.nodes[node]:
-                constructor = construct_sample(DAG, node)
-            elif 'function' in DAG.nodes[node]:
-                constructor = construct_function(DAG, node)
-                
-            if 'plates' in DAG.nodes[node]:
-                plate = ''.join(DAG.nodes[node]['plates'])
-                AddToPlate(plate, constructor).visit(tree)
-            else:
-                # WARNING: This is not general enough, will fail sooner or later
-                parents = [edge[0] for edge in DAG.in_edges(node)]
-                # find plate containing first parent of node
-                if 'plates' in DAG.nodes[parents[0]]:
-                    parent_plate = DAG.nodes[parents[0]]['plates']
-                    # find index of plate containing parent of node
-                    pos = [i for i,elem in enumerate(tree.body[0].body) if (type(elem) == ast.With and elem.items[0].context_expr.args[0].values[0].s == parent_plate[0]+'_')]
-                    pos = pos[0] + 1
-                # if parent is not plated, construct node after parent
-                else:
-                    pos = [i for i,elem in enumerate(tree.body[0].body) if (type(elem) == ast.Assign and elem.targets[0].id == parents[0])]
-                    pos = pos[0] + 1
-                AddToFunctionBody(constructor, pos=pos).visit(tree)
+            AddToFunctionBody(construct, pos=pos).visit(tree)
+
+        #print(astor.dump_tree(tree))
+
     # add _id to model
     AddToFunctionBody(Assign(targets=[Name(id='_id')], value=Attribute(value=Name(id='self'), attr='_id')), pos=0).visit(tree)
     # add shape assignment
@@ -266,7 +337,7 @@ def generate_get_param_shapes_and_support_and_init(DAG):
     # edit __init__()
     init_source = inspect.getsource(DAGModel.__init__).strip()
     init_tree = parse(init_source)
-    dims = [dim for shape in shape_dims for dim in shape if dim not in 'ND']
+    dims = set([dim for shape in shape_dims for dim in shape if dim not in 'ND'])
     for dim in dims:
         AddArgsToFunctionDef(dim,pos=2).visit(init_tree)
         AddToFunctionBody(Assign(targets=[Attribute(value=Name(id='self'), attr=dim)], value=Name(id=dim))).visit(init_tree)
