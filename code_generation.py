@@ -111,11 +111,20 @@ def construct_sample(graph, node):
     dist = Call(func=Attribute(value=Name(id='dist'), attr=dist),
                             args=args,
                             keywords=[])
+    # Declare dimensions as dependent in case of vector, matrix or tensor-valued distributions
+    if 'event_dims' in graph.nodes[node]:
+        n_event_dims = graph.nodes[node]['event_dims']
+        dist = Call(func=Attribute(dist,attr='to_event'),args=[Num(n=n_event_dims)],keywords=[])
+
+
+    keywords = []
+    if 'infer' in graph.nodes[node] and graph.nodes[node]['infer'] == 'parallel':
+        keywords.append(keyword(arg='infer', value=Dict(keys=[Str(s='enumerate')], values=[Str(s='parallel')])))
+
     if graph.nodes[node]['type'] == 'latent':
         node_name = JoinedStr(
                             values=[Str(s=node+'_'),
                                 FormattedValue(value=Name(id='_id'), conversion=-1, format_spec=None)])
-        keywords = []
     elif graph.nodes[node]['type'] == 'obs':
         node_name = Str(s='obs')
         # assuming this is wrapped in a with pyro.plate(subsampling) as ind:
@@ -142,10 +151,11 @@ def construct_function(graph, node):
         # convert args into list, in case it was a tuple
         graph.nodes[node]['args'] = list(graph.nodes[node]['args'])
         # if the args list doesn't demarcate where parents should go, put them in the front
-        if graph.nodes[node]['args'].count('p') + graph.nodes[node]['args'].count('t') == 0:
+        sum_of_parent_args = sum([graph.nodes[node]['args'].count(argtype) for argtype in ['p','t','s']])
+        if sum_of_parent_args < n_parents:
             graph.nodes[node]['args'] = ['p']*n_parents + graph.nodes[node]['args']
         else:
-            assert graph.nodes[node]['args'].count('p') + graph.nodes[node]['args'].count('t') == n_parents
+            assert sum_of_parent_args == n_parents
     else:
         graph.nodes[node]['args'] = ['p']*n_parents
 
@@ -158,6 +168,9 @@ def construct_function(graph, node):
         elif arg == 't':
             e = parents.pop(0)
             args.append(Attribute(value=Name(id=e[0]), attr='T'))
+        elif arg == 's':
+            e = parents.pop(0)
+            args.append(Call(func=Attribute(value=Name(id=e[0]), attr='squeeze'), args=[], keywords=[]))
         else:
             assert isinstance(arg, ast.AST), f"arg attribute {arg} in node {node} is not an AST object."
             args.append(arg)
@@ -190,6 +203,12 @@ def construct_function(graph, node):
         else:
             return Assign(targets=[Name(id=node)],
                 value=Call(func=Attribute(value=Name(id=args[0]), attr=function), args=args[1:], keywords=[]))
+
+    elif graph.nodes[node]['type'] == 'index':
+        assert len(args) == 2
+        return Assign(targets=[Name(id=node)],
+            value=Subscript(value=args[0], slice=Index(value=args[1])))
+
 
 def construct_plate(graph, plate):
     if plate == 'N':
@@ -260,6 +279,7 @@ def generate_model(DAG, dims, root_node_suffix = None):
         constructor = {'param':construct_param,
                        'function':construct_function,
                        'suffix':construct_function,
+                       'index':construct_function,
                        'const':construct_constant,
                        'latent':construct_sample,
                        'obs':construct_sample
@@ -347,10 +367,12 @@ def generate_guide(DAG, dims):
     guide_DAG = DAG.copy()
     # remove X
     # remove nodes connected to X that aren't latent nodes
+    # remove nodes that are being inferred by parallel enumeration
     # properly we should recursively remove nodes that lead to X that aren't latent nodes until we reach latent nodes,
     # but in this case we just have one layer of deterministic nodes
     # so we'll worry about the general case later
     nodes_to_remove = ['X']
+    nodes_to_remove.extend([node for node,infer in nx.get_node_attributes(DAG, 'infer').items() if infer=='parallel'])
     in_nodes = [edge[0] for edge in guide_DAG.in_edges('X') if guide_DAG.nodes[edge[0]]['type'] != 'latent']
     nodes_to_remove.extend(in_nodes)
     guide_DAG.remove_nodes_from(nodes_to_remove)
