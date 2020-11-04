@@ -358,7 +358,8 @@ def generate_get_param_shapes_and_support_and_init(DAG):
     init_source = inspect.getsource(DAGModel.__init__).strip()
     init_tree = parse(init_source)
     dims = set([dim for shape in shape_dims for dim in shape if dim not in 'ND'])
-    for dim in dims:
+    # reverse sorting the dim arguments to have a consistent order
+    for dim in reversed(sorted(dims)):
         AddArgsToFunctionDef(dim,pos=2).visit(init_tree)
         AddToFunctionBody(Assign(targets=[Attribute(value=Name(id='self'), attr=dim)], value=Name(id=dim))).visit(init_tree)
     return get_param_shape_tree, init_tree, dims
