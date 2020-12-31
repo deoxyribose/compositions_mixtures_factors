@@ -155,7 +155,8 @@ def construct_function(graph, node):
         if sum_of_parent_args < n_parents:
             graph.nodes[node]['args'] = ['p']*n_parents + graph.nodes[node]['args']
         else:
-            assert sum_of_parent_args == n_parents
+            assert sum_of_parent_args == n_parents, f'{node} has {n_parents} parent(s) in the graph, but {sum_of_parent_args} function arguments are expected.'
+
     else:
         graph.nodes[node]['args'] = ['p']*n_parents
 
@@ -358,8 +359,8 @@ def generate_get_param_shapes_and_support_and_init(DAG):
     init_source = inspect.getsource(DAGModel.__init__).strip()
     init_tree = parse(init_source)
     dims = set([dim for shape in shape_dims for dim in shape if dim not in 'ND'])
-    # reverse sorting the dim arguments to have a consistent order
-    for dim in reversed(sorted(dims)):
+    # sorting the dim arguments to have a consistent order
+    for dim in sorted(dims):
         AddArgsToFunctionDef(dim,pos=2).visit(init_tree)
         AddToFunctionBody(Assign(targets=[Attribute(value=Name(id='self'), attr=dim)], value=Name(id=dim))).visit(init_tree)
     return get_param_shape_tree, init_tree, dims
@@ -383,7 +384,16 @@ def generate_guide(DAG, dims):
     AddReturn(tuple([node for node in guide_DAG.nodes if guide_DAG.nodes[node]['type'] == 'latent'])).visit(tree)
     return tree
 
-def generate_Model_class(DAG):
+def generate_Model_class(DAG, production = None):
+    if production is None:
+        class_name = 'DAGmodel'
+    else:
+        class_name = ''
+        for func in production[::-1]:
+            class_name += func.__repr__().split(' ')[1].split('_')[0]
+            class_name += '_'
+        class_name = class_name[:-1]
+
     get_param_shape_tree, init_tree, dims = generate_get_param_shapes_and_support_and_init(DAG)
     tree = generate_model(DAG, dims, root_node_suffix = 'prior')
     guide_tree = generate_guide(DAG, dims)
@@ -403,17 +413,24 @@ def generate_Model_class(DAG):
 
     class_source = inspect.getsource(DAGModel).strip()
     # insert source code
-    class_source = insert_function_into_class(class_source, init_source, 'def __init__', 'super(DAGModel, self).__init__(X, batch_size, _id)')    
+    class_source = insert_function_into_class(class_source, init_source, 'def __init__', '__init__(X, batch_size, _id)')    
     class_source = insert_function_into_class(class_source, get_param_shape_source, 'def get_param_shapes_and_support', '_id = self._id')    
     class_source = insert_function_into_class(class_source, model_source, 'def model', 'return X')    
     class_source = insert_function_into_class(class_source, guide_source, 'def guide', 'raise NotImplementedError')    
 
-    #class_source = parse(class_source)
-    #fix_missing_locations(class_source)
-    #class_source = astor.to_source(class_source)
-    #print(class_source)
-    # write to file
-    with open("model.py", "w") as output:
-        output.write('from models_and_guides import *\n\n')
-        output.writelines(class_source)
+    class_source = parse(class_source)
+    ChangeClassName(class_name).visit(class_source)
+    fix_missing_locations(class_source)
+    class_source = astor.to_source(class_source)
 
+    # write to file
+    with open("model.py", "r") as models:
+        if class_source not in models.read():
+            write_mode = "a"
+        else:
+            write_mode = "w"
+
+    with open("model.py", write_mode) as output:
+        output.write('from models_and_guides import *\n\n')
+        output.write(class_source)
+        print(f'Created model {class_name} in model.py')
