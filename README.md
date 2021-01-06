@@ -1,2 +1,2 @@
 # compositions_mixtures_factors
-Automatic differentiation mean-field variational inference in compositions of mixture and factor models
+Research prototype for Pyro code generation and compositional model search.
