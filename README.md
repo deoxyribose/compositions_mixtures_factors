@@ -4,7 +4,7 @@ Research prototype for Pyro code generation and compositional model search.
 There are three main functionalities:
 1. Given a probabilistic graphical models (PGM) defined as a graph, apply a subgraph substitution, returning a new graphical model. 
 2. Compile a PGM to a Pyro model, and train it with stochastic variational inference.
-3. Given a trained "teacher" graphical model A, and an untrained "student" model B derived from A, initialize B using the parameters of A. This usually gives orders of magnitude faster inference.
+3. Given a trained "teacher" graphical model A, and an untrained "student" model B derived from A, initialize B using the parameters of A. This usually gives orders of magnitude faster inference on B.
 
 *Random\ splits.ipynb* demonstrates 1., 2. and 3. for model selection on synthetic data generated from a mixture of factor analyses.
 
