@@ -8,7 +8,7 @@ There are three main functionalities:
 
 *Random\ splits.ipynb* demonstrates 1., 2. and 3. for model selection on synthetic data generated from a mixture of factor analyses.
 
-*model_operators.py* defines AST operators for modifying parts of python functions
+*model_operators.py* defines AST operators for modifying parts of Pyro models and guides
 
 *code_generation.py* contains the graph to Pyro model compiler
 
