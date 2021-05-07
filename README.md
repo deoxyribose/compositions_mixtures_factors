@@ -21,7 +21,7 @@ There are three main functionalities:
   * Checkpoint saving
   * The successive halving algorithm for hyperparameter tuning
 
-initializations.py defines initializers for compiled models, including
+*initializations.py* defines initializers for compiled models, including
   * random hyperparameter iniitalization and weakly informative priors
   * given a teacher and student model, initialize the student
 
