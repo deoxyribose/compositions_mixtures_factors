@@ -9,7 +9,9 @@ There are three main functionalities:
 *Random\ splits.ipynb* demonstrates 1., 2. and 3. for model selection on synthetic data generated from a mixture of factor analyses.
 
 *model_operators.py* defines AST operators for modifying parts of python functions
+
 *code_generation.py* contains the graph to Pyro model compiler
+
 *graph_grammar.py* implements several subgraph substitutions
   * Marginalizing the local latent variables out in a factor analysis PGM
   * Creating a mixture of factor analyses from a factor analysis PGM
@@ -26,6 +28,7 @@ There are three main functionalities:
   * given a teacher and student model, initialize the student
 
 *models_and_guides.py* contains the main model class, which includes a number of convenience functions, and various models in the mixture/factor family
+
 *tracepredictive.py* implements a variant of Pyro's tracepredictive which was buggy for some models at the time of writing
 
 The idea for the prototype is that by 
