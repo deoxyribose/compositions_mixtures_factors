@@ -34,18 +34,26 @@ def set_uninformative_priors(param_shapes_and_support,noise_std=1, param_history
 
 def get_random_init(param_shapes_and_support,noise_std=1, param_history = None):
     init = {}
-    for param_name, (shape, constraint) in param_shapes_and_support.items():
+    #for param_name, (shape, constraint) in param_shapes_and_support.items():
+    for item in param_shapes_and_support.items():
+        if len(item[1]) == 2:
+            param_name, (shape, constraint) = item
+            offset, scaling = 0.,1.
+        elif len(item[1]) == 3:
+            param_name, (shape, transform, constraint) = item
+            offset,scaling = transform
+
         if constraint == constraints.real:
-            init[param_name] = torch.randn(shape)
+            init[param_name] = offset + scaling*torch.randn(shape)
         elif constraint == constraints.positive:
-            init[param_name] = torch.abs(torch.randn(shape))
+            init[param_name] = offset + scaling*torch.abs(torch.randn(shape))
         else:
             raise NotImplementedError
     return init
 
 def incremental_init(student, teacher):
     # modify parameters of student model to those of the teacher model
-    # assumong student has been randomly initialized
+    # assuming student has been randomly initialized
     # assuming both student and teacher have the same parameter names, modulo id
     # assuming teacher has smaller- or equal-sized parameters
     for param_name, param_value in student.param_init.items():

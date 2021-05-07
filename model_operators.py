@@ -1,6 +1,16 @@
 import inspect, ast, astor
 from ast import *
 
+class ChangeClassName(ast.NodeTransformer):
+    def __init__(self, new_name):
+        self.new_name = new_name
+        super().__init__()
+    def visit_ClassDef(self, node):
+        self.generic_visit(node)
+        newnode = node
+        newnode.name = self.new_name
+        return newnode
+
 class ChangeFunctionName(ast.NodeTransformer):
     def __init__(self, new_name):
         self.new_name = new_name

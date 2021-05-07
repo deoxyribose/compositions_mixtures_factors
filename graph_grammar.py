@@ -89,23 +89,23 @@ def mixture_from_marg_factor(marg_factor):
         edges.append((node+'_idx','X',mixture.edges[(node,'X')]))
         mixture.remove_edge(node,'X')
         
-    nodes.extend([
-        ('loc_loc',{'type':'param','shape':'CD'}),
-        ('loc_scale',{'type':'param','shape':'CD','constraint':'positive'}),
-        ('loc',{'distribution':dist.Normal,'type':'latent','event_dims':1})
-        #('loc',{'distribution':dist.Normal,'type':'latent','event_dims':2})
-    ])
-
-    edges.extend([    
-        ('loc_loc','loc',{'type':'param','param':'loc'}),
-        ('loc_scale','loc',{'type':'param','param':'scale'}),
-        ])
+#    nodes.extend([
+#        ('loc_loc',{'type':'param','shape':'CD'}),
+#        ('loc_scale',{'type':'param','shape':'CD','constraint':'positive'}),
+#        ('loc',{'distribution':dist.Normal,'type':'latent','event_dims':1})
+#        #('loc',{'distribution':dist.Normal,'type':'latent','event_dims':2})
+#    ])
+#
+#    edges.extend([    
+#        ('loc_loc','loc',{'type':'param','param':'loc'}),
+#        ('loc_scale','loc',{'type':'param','param':'scale'}),
+#        ])
 
     mixture.add_nodes_from(nodes)
     mixture.add_edges_from(edges)
 
-    del mixture.nodes['loc']['function']
-    del mixture.nodes['loc']['args']
+    #del mixture.nodes['loc']['function']
+    #del mixture.nodes['loc']['args']
 
     #mixture.nodes['loc']['plates'] = ['C','D']
     # add the new plate dim to the shapes

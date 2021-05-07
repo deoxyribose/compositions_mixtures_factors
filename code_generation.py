@@ -197,6 +197,7 @@ def construct_function(graph, node):
                         args=args,
                         keywords=[]))
     # if it's a suffix function, assume the first arg is the tensor, and the rest are args
+    # assumes graph.nodes[node]['function'] is a string
     elif graph.nodes[node]['type'] == 'suffix':
         function = graph.nodes[node]['function']
         if function == 'T':
@@ -234,6 +235,8 @@ def construct_plate(graph, plate):
 def insert_function_into_class(class_source, function_code, function_def_str, function_return_str):
     start_idx = class_source.find(function_def_str)
     end_idx = class_source.find(function_return_str) + len(function_return_str)
+    assert start_idx != -1 and end_idx != -1, f"Couldn't find {function_def_str} or {function_return_str} in {class_source}"
+    assert start_idx < end_idx
     # add indentation
     function_code = function_code.replace('\n    ','\n        ')
     return class_source.replace(class_source[start_idx:end_idx], function_code)
@@ -414,6 +417,7 @@ def generate_Model_class(DAG, production = None):
     class_source = inspect.getsource(DAGModel).strip()
     # insert source code
     class_source = insert_function_into_class(class_source, init_source, 'def __init__', '__init__(X, batch_size, _id)')    
+    class_source = insert_function_into_class(class_source, 'super('+class_name+', self)', 'super(DAG', 'Model, self)')    
     class_source = insert_function_into_class(class_source, get_param_shape_source, 'def get_param_shapes_and_support', '_id = self._id')    
     class_source = insert_function_into_class(class_source, model_source, 'def model', 'return X')    
     class_source = insert_function_into_class(class_source, guide_source, 'def guide', 'raise NotImplementedError')    

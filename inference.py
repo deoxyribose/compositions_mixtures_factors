@@ -23,6 +23,7 @@ import sys
 import operator
 sys.path.append("..")
 from initializations import *
+from utils import *
 
 def p_value_of_slope(loss, window, slope_significance):
     if len(loss) < window or any(map(torch.isinf, loss)) or slope_significance == 1:
@@ -31,7 +32,7 @@ def p_value_of_slope(loss, window, slope_significance):
         recent = loss[-window:]
         return sps.linregress(np.arange(window),recent)[3]
 
-def inference(Model, training_data, test_data, config = None):
+def inference(Model, training_data, test_data = None, config = None):
     '''
     A wrapper function calling Pyro's SVI step with settings given in config.
     Records telemetry including elbo loss, mean negative log likelihood on held out data, gradient norms and parameter history during training.
@@ -54,9 +55,11 @@ def inference(Model, training_data, test_data, config = None):
             slope_significance = 0.1,
             track_params = False,
             monitor_gradients = False,
-            optimizer_state = None,
-            param_store_state = None,
+            telemetry = None
         )
+
+    Example: 
+
     '''
     #initcopy = clone_init(init)
     if config is None:
@@ -76,6 +79,9 @@ def inference(Model, training_data, test_data, config = None):
                 monitor_gradients = False,
                 telemetry = None,
             )
+
+    if test_data is None:
+        training_data, test_data = train_test_split(training_data)
     #def per_param_callable(module_name, param_name):
     #    return {"lr": config['learning_rate'], "betas": (0.90, 0.999)} # from http://pyro.ai/examples/svi_part_i.html
     model = Model.model
@@ -93,6 +99,12 @@ def inference(Model, training_data, test_data, config = None):
         pyro.get_param_store().set_state(telemetry['param_store_state'])
         i = len(telemetry['loss'])
         config['n_iter'] += i
+        # init params not in telemetry
+        model(training_data)
+        guide(training_data)
+        for k,v in pyro.get_param_store().items():
+            if k not in telemetry['param_history'].keys():
+                telemetry['param_history'][k] = v.unsqueeze(0)
     else:
         pyro.clear_param_store()
         telemetry = dict()
@@ -124,7 +136,12 @@ def inference(Model, training_data, test_data, config = None):
     
     max_plate_nesting = _guess_max_plate_nesting(model,(training_data,),{})
     #print("Guessed that model has max {} nested plates.".format(max_plate_nesting)) 
-    if 'mixture' in model.__repr__():
+
+    # look for sample sites with infer:enumerate
+    trace = pyro.poutine.trace(model).get_trace(training_data)
+    contains_enumeration = any([values['infer'] == {'enumerate': 'parallel'} for node,values in trace.nodes.items() if 'infer' in values])
+
+    if contains_enumeration:
         elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting, num_particles=config['n_elbo_particles'], vectorize_particles=True)
     else:
         elbo = Trace_ELBO(max_plate_nesting=max_plate_nesting, num_particles=config['n_elbo_particles'], vectorize_particles=True)

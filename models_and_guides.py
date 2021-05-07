@@ -31,6 +31,13 @@ class Model():
         assert not any([key.endswith('_'+_id) for key in pyro.get_param_store().keys()])
         self._id = _id
         self.batch_size = batch_size
+        self.param_shapes_and_support = self.get_param_shapes_and_support()
+        self.param_init = self.initialize_parameters()
+
+    def get_param_shapes_and_support(self, _id = None):
+        if _id == None:
+            _id = self._id
+        # rest to be filled in for specific models
 
     def initialize_parameters(self):
         return get_random_init(self.param_shapes_and_support)
@@ -50,7 +57,7 @@ class Model():
         E_{x_j~X}[log E_{z_i~q}[p(x_j|z_i)]]
 
         WARNING: Must only be called inside a with torch.no_grad():, 
-        # otherwise pytorch will try to diff through this
+        # otherwise pytorch will auto-diff through this
 
         WARNING: Guide gets parameters from Pyro's param store. 
         '''
@@ -79,12 +86,32 @@ class Model():
 #############
 #############
 
+class DAGModel(Model):
+    """
+    Template class for code generated from a DAG
+    """
+    def __init__(self, X, batch_size, _id):
+        super(DAGModel, self).__init__(X, batch_size, _id)
+
+    def get_param_shapes_and_support(self, _id = None):
+        if _id == None:
+            _id = self._id
+
+    def model(self, X):
+        return X
+
+    def guide(self, X):
+        raise NotImplementedError
+
+
+#############
+#############
 
 
 class ZeroMeanFactor(Model):
     def __init__(self, X, K, batch_size, _id):
-        super(ZeroMeanFactor, self).__init__(X, batch_size, _id)
         self.K = K
+        super(ZeroMeanFactor, self).__init__(X, batch_size, _id)
         self.param_shapes_and_support = self.get_param_shapes_and_support()
         self.param_init = self.initialize_parameters()
 
