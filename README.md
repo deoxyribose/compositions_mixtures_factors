@@ -31,6 +31,6 @@ There are three main functionalities:
 The idea for the prototype is that by 
 1. Adding subgraph substitutions to *graph_grammar.py*
 2. Definiting how models can iniitalize each other
-3. Adding a search algorithm such as MCTS using a predictive likelihood as the criterion
+3. Adding a search algorithm such as MCTS using held-out predictive likelihood as the criterion
 
 the system can learn to construct and efficiently find and train generative models for any vector-valued dataset.
