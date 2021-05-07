@@ -6,15 +6,15 @@ There are three main functionalities:
 2. Compile a PGM to a Pyro model, and train it with stochastic variational inference.
 3. Given a trained "teacher" graphical model A, and an untrained "student" model B derived from A, initialize B using the parameters of A. This usually gives orders of magnitude faster inference.
 
-Random\ splits.ipynb demonstrates 1., 2. and 3. for model selection on synthetic data generated from a mixture of factor analyses.
+*Random\ splits.ipynb* demonstrates 1., 2. and 3. for model selection on synthetic data generated from a mixture of factor analyses.
 
-model_operators.py defines AST operators for modifying parts of python functions
-code_generation.py contains the graph to Pyro model compiler
-graph_grammar.py implements several subgraph substitutions
+*model_operators.py* defines AST operators for modifying parts of python functions
+*code_generation.py* contains the graph to Pyro model compiler
+*graph_grammar.py* implements several subgraph substitutions
   * Marginalizing the local latent variables out in a factor analysis PGM
   * Creating a mixture of factor analyses from a factor analysis PGM
 
-inference.py implements mini-batch stochastic variational inference for compiled PGMs, and includes
+*inference.py* implements mini-batch stochastic variational inference for compiled PGMs, and includes
   * Convergence estimation by linear regression on ELBO
   * Tracking of gradient norms and parameter values during training
   * Tracking of mean held-out predictive likelihood on a test set
@@ -25,8 +25,8 @@ initializations.py defines initializers for compiled models, including
   * random hyperparameter iniitalization and weakly informative priors
   * given a teacher and student model, initialize the student
 
-models_and_guides.py contains the main model class, which includes a number of convenience functions, and various models in the mixture/factor family
-tracepredictive.py implements a variant of Pyro's tracepredictive which was buggy for some models at the time of writing
+*models_and_guides.py* contains the main model class, which includes a number of convenience functions, and various models in the mixture/factor family
+*tracepredictive.py* implements a variant of Pyro's tracepredictive which was buggy for some models at the time of writing
 
 The idea for the prototype is that by 
 1. Adding subgraph substitutions to graph_grammar.py
