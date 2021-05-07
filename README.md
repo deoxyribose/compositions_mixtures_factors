@@ -29,7 +29,8 @@ There are three main functionalities:
 *tracepredictive.py* implements a variant of Pyro's tracepredictive which was buggy for some models at the time of writing
 
 The idea for the prototype is that by 
-1. Adding subgraph substitutions to graph_grammar.py
+1. Adding subgraph substitutions to *graph_grammar.py*
 2. Definiting how models can iniitalize each other
 3. Adding a search algorithm such as MCTS using a predictive likelihood as the criterion
+
 the system can learn to construct and efficiently find and train generative models for any vector-valued dataset.
