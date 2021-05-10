@@ -13,8 +13,8 @@ There are three main functionalities:
 *code_generation.py* contains the graph to Pyro model compiler
 
 *graph_grammar.py* implements several subgraph substitutions
-  * Marginalizing the local latent variables out in a factor analysis PGM
-  * Creating a mixture of factor analyses from a factor analysis PGM
+  * Marginalize the local latent variables out in a factor analysis PGM
+  * Create a mixture of models A1, A2, ... AN given model A, where some or none parameters are shared (e.g. given a factor model, one can create a mixture of factor models, a mixture of factor models with shared covariance (a projected mixture), a mixture of factor models with shared mean, or a mixture of factor models with shared noise variances)
 
 *inference.py* implements mini-batch stochastic variational inference for compiled PGMs, and includes
   * Convergence estimation by linear regression on ELBO
